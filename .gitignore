@@ -1,0 +1,4 @@
+# anotações locais do projeto (não publicar)
+memory/
+# configurações locais do Claude Code
+.claude/
