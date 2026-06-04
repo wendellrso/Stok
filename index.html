@@ -131,6 +131,12 @@
   .imp-summary .ln{display:flex; justify-content:space-between; padding:4px 0}
   .imp-summary .ln b{font-weight:800}
   .imp-summary .new b{color:var(--green)} .imp-summary .upd b{color:var(--accent)} .imp-summary .nodept b{color:var(--amber)}
+  .nav button{position:relative}
+  .nav-badge{position:absolute; top:4px; left:50%; margin-left:4px; min-width:16px; height:16px; padding:0 4px; background:var(--red); color:#fff; font-size:10px; font-weight:800; border-radius:9px; display:flex; align-items:center; justify-content:center; line-height:1}
+  #torchBtn{flex:0 0 auto; min-width:52px; font-size:18px}
+  #torchBtn.on{background:var(--amber-soft); border-color:var(--amber)}
+  .btn-share{width:100%; margin-top:16px; padding:13px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; font-weight:700; color:var(--ink); display:flex; align-items:center; justify-content:center; gap:8px}
+  .btn-share:active{transform:scale(.985)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
@@ -158,7 +164,7 @@
       <div class="scan-overlay hidden" id="scanOverlay"><div class="scan-frame"></div><div class="scan-laser"></div></div>
     </div>
     <div class="scan-status" id="scanStatus"></div>
-    <div class="input-row"><button id="camBtn" class="full" onclick="toggleCam()">Câmera</button></div>
+    <div class="input-row"><button id="camBtn" class="full" onclick="toggleCam()">Câmera</button><button id="torchBtn" class="hidden" onclick="toggleTorch()" title="Lanterna">🔦</button></div>
     <div class="input-row"><input id="manualCode" inputmode="numeric" placeholder="Código de barras"><button onclick="handleCode(document.getElementById('manualCode').value)">OK</button></div>
   </div>
   <div class="view hidden" id="v-alerts">
@@ -177,6 +183,7 @@
     <div id="pendingBanner"></div>
     <div class="risk-total"><div class="lbl">Em risco nos próximos 30 dias</div><div class="val" id="riskVal">R$ 0,00</div><div class="sub" id="riskSub">0 lotes</div></div>
     <div id="deptBars"></div>
+    <button class="btn-share" onclick="shareReport()">📤 Compartilhar relatório</button>
   </div>
   <div class="view hidden" id="v-settings">
     <div class="view-title">Configurações</div>
@@ -200,7 +207,7 @@
   </div>
   <div class="nav" id="nav">
     <button data-view="scan" class="active" onclick="go('scan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10"/></svg>Lançar</button>
-    <button data-view="alerts" onclick="go('alerts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 00-7 7c0 5-3 7-3 7h20s-3-2-3-7a7 7 0 00-7-7zM10 21a2 2 0 004 0"/></svg>Alertas</button>
+    <button data-view="alerts" onclick="go('alerts')"><span class="nav-badge hidden" id="alertBadge">0</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 00-7 7c0 5-3 7-3 7h20s-3-2-3-7a7 7 0 00-7-7zM10 21a2 2 0 004 0"/></svg>Alertas</button>
     <button data-view="report" id="navReport" onclick="go('report')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 16l4-6 3 3 5-7"/></svg>Relatório</button>
     <button data-view="settings" id="navSettings" onclick="go('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 00-1.7-1L14.5 2h-5l-.3 2.5a7 7 0 00-1.7 1l-2.4-1-2 3.5L2.6 11a7 7 0 000 2l-2 1.5 2 3.5 2.4-1a7 7 0 001.7 1L9.5 22h5l.3-2.5a7 7 0 001.7-1l2.4 1 2-3.5-2-1.5a7 7 0 00.1-1z"/></svg>Config</button>
   </div>
@@ -234,7 +241,7 @@ async function doLogin(){
   startApp();
 }
 async function doLogout(){await sb.auth.signOut();session=null;document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');stopCam();}
-async function startApp(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=isDono?'Acesso total':'Operação';const pill=document.getElementById('tbPill');pill.textContent=isDono?'Dono':'Repositor';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();go('scan');}
+async function startApp(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=isDono?'Acesso total':'Operação';const pill=document.getElementById('tbPill');pill.textContent=isDono?'Dono':'Repositor';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();updateAlertBadge();go('scan');}
 function go(view){['scan','alerts','report','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='alerts')renderAlerts();if(view==='report')renderReport();if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
   const {data,error}=await sb.from('departments').select('id, name, alert_days').order('name');
@@ -259,7 +266,17 @@ async function loadLots(){
 function deptAlert(dept){const d=db.depts.find(x=>x.name===dept);return d?d.alertDays:30;}
 function daysUntil(s){const t=new Date();t.setHours(0,0,0,0);return Math.round((new Date(s+'T00:00:00')-t)/86400000);}
 function severity(code,days){const p=db.products[code];const limit=p?deptAlert(p.dept):30;if(days<=Math.max(2,Math.round(limit*0.25)))return'crit';if(days<=limit)return'warn';return'ok';}
-let codeReader=null,scanning=false;
+// selo vermelho no ícone de Alertas: nº de lotes críticos. Faz o app "gritar" o que precisa de ação.
+function updateAlertBadge(){const n=db.lots.filter(l=>db.products[l.code]&&severity(l.code,daysUntil(l.exp))==='crit').length;const b=document.getElementById('alertBadge');if(!b)return;b.textContent=n>99?'99+':n;b.classList.toggle('hidden',n===0);}
+let codeReader=null,scanning=false,scanLocked=false,torchOn=false,audioCtx=null;
+// bipe curto + vibração: confirma a leitura sem o operador olhar a tela (sensação de leitor de verdade)
+function feedbackScan(){
+  try{if(navigator.vibrate)navigator.vibrate(70);}catch(e){}
+  try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator();const g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type='square';o.frequency.value=880;g.gain.setValueAtTime(0.12,audioCtx.currentTime);o.start();o.stop(audioCtx.currentTime+0.11);}catch(e){}
+}
+function camTrack(){const v=document.getElementById('video');const s=v&&v.srcObject;return s?s.getVideoTracks()[0]:null;}
+function maybeShowTorch(){const t=camTrack();const cap=(t&&t.getCapabilities)?t.getCapabilities():{};document.getElementById('torchBtn').classList.toggle('hidden',!(cap&&cap.torch));}
+async function toggleTorch(){const t=camTrack();if(!t)return;torchOn=!torchOn;try{await t.applyConstraints({advanced:[{torch:torchOn}]});document.getElementById('torchBtn').classList.toggle('on',torchOn);}catch(e){toast('Lanterna indisponível neste aparelho','err');torchOn=false;}}
 async function toggleCam(){if(scanning){stopCam();return;}
   if(!window.ZXing){setStatus('Leitor não carregou. Verifique a internet e recarregue.');return;}
   try{
@@ -268,15 +285,16 @@ async function toggleCam(){if(scanning){stopCam();return;}
     codeReader=new ZXing.BrowserMultiFormatReader(hints);
     const video=document.getElementById('video');
     video.classList.remove('hidden');document.getElementById('scanPlaceholder').classList.add('hidden');document.getElementById('scanOverlay').classList.remove('hidden');document.getElementById('camBtn').textContent='Parar';
-    scanning=true;setStatus('Aponte para o código de barras...');
-    // câmera traseira; o callback dispara a cada quadro — só agimos quando há leitura
-    await codeReader.decodeFromConstraints({video:{facingMode:'environment'}},video,(result)=>{if(result&&scanning){const code=result.getText();stopCam();handleCode(code);}});
+    scanning=true;scanLocked=false;setStatus('Aponte para o código de barras...');
+    // câmera fica ligada (modo sequência); o lock evita reler enquanto a tela do lote está aberta
+    await codeReader.decodeFromConstraints({video:{facingMode:'environment'}},video,(result)=>{if(result&&scanning&&!scanLocked){scanLocked=true;feedbackScan();handleCode(result.getText());}});
+    maybeShowTorch();
   }catch(e){setStatus('Câmera indisponível. Use o campo manual.');document.getElementById('camBtn').textContent='Câmera';scanning=false;}}
-function stopCam(){scanning=false;if(codeReader){codeReader.reset();codeReader=null;}const v=document.getElementById('video');if(v){v.classList.add('hidden');v.srcObject=null;}document.getElementById('scanOverlay')?.classList.add('hidden');document.getElementById('scanPlaceholder')?.classList.remove('hidden');const b=document.getElementById('camBtn');if(b)b.textContent='Câmera';}
+function stopCam(){scanning=false;scanLocked=false;const t=camTrack();if(t&&torchOn){try{t.applyConstraints({advanced:[{torch:false}]});}catch(e){}}torchOn=false;document.getElementById('torchBtn')?.classList.add('hidden');document.getElementById('torchBtn')?.classList.remove('on');if(codeReader){codeReader.reset();codeReader=null;}const v=document.getElementById('video');if(v){v.classList.add('hidden');v.srcObject=null;}document.getElementById('scanOverlay')?.classList.add('hidden');document.getElementById('scanPlaceholder')?.classList.remove('hidden');const b=document.getElementById('camBtn');if(b)b.textContent='Câmera';}
 function setStatus(t){document.getElementById('scanStatus').textContent=t;}
 function handleCode(raw){const code=(raw||'').trim();if(!code){toast('Código vazio','err');return;}document.getElementById('manualCode').value='';if(db.products[code])openLotSheet(code);else openNewProductSheet(code);}
 function sheet(html){closeSheet();const bg=document.createElement('div');bg.className='sheet-bg';bg.id='sheetBg';bg.innerHTML='<div class="sheet">'+html+'</div>';bg.addEventListener('click',e=>{if(e.target===bg)closeSheet()});document.body.appendChild(bg);}
-function closeSheet(){document.getElementById('sheetBg')?.remove();}
+function closeSheet(){document.getElementById('sheetBg')?.remove();if(scanning){setStatus('Aponte para o próximo código...');setTimeout(()=>{scanLocked=false;},900);}}
 function deptOptions(sel){return db.depts.map(d=>'<option '+(d.name===sel?'selected':'')+'>'+d.name+'</option>').join('');}
 function openNewProductSheet(code){const isDono=session.role==='dono';const costField=isDono?'<div class="field"><label>Custo unitário (R$)</label><input id="np_cost" inputmode="decimal" placeholder="ex: 3,80"></div>':'<div class="field"><label>Custo unitário</label><div style="padding:13px 14px;background:var(--panel2);border:1px dashed var(--line);border-radius:10px;color:var(--dim);font-size:13px"><span class="lock">Definido pelo dono</span></div></div>';
   sheet('<h3>Produto novo</h3><div class="sub">Código não está no cadastro. Registre uma vez.</div><div class="card-code">'+code+'</div><div class="form-grid"><div class="field"><label>Nome do produto</label><input id="np_name" placeholder="ex: Leite Cond. Moça 395g"></div><div class="field"><label>Departamento</label><select id="np_dept">'+deptOptions(db.depts[0]&&db.depts[0].name)+'</select></div>'+costField+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="saveNewProduct(\''+code+'\')">Continuar</button></div>');}
@@ -293,17 +311,28 @@ async function saveLot(code){const lot=document.getElementById('lot_num').value.
   const ex=db.lots.find(l=>l.code===code&&l.lot===lot&&l.exp===exp);// mesmo produto+lote+validade já existe?
   if(ex){const novaQtd=ex.qty+qty;const {error}=await sb.from('lots').update({quantity:novaQtd}).eq('id',ex.id);if(error){toast('Erro ao lançar lote','err');return;}ex.qty=novaQtd;}
   else{const {data,error}=await sb.from('lots').insert({product_id:prod.id,lot_number:lot,expiry:exp,quantity:qty}).select('id').single();if(error){toast('Erro ao lançar lote','err');return;}db.lots.push({id:data.id,code,lot,exp,qty});}
-  closeSheet();toast('Lote '+lot+' lançado');}
+  updateAlertBadge();closeSheet();toast('Lote '+lot+' lançado');}
 let curRange='today';
 document.getElementById('alertSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;curRange=b.dataset.range;document.querySelectorAll('#alertSeg button').forEach(x=>x.classList.toggle('active',x===b));renderAlerts();});
 function renderAlerts(){const rows=db.lots.map(l=>({...l,days:daysUntil(l.exp),p:db.products[l.code]})).filter(l=>l.p).sort((a,b)=>a.days-b.days);const crit=rows.filter(l=>severity(l.code,l.days)==='crit');document.getElementById('cToday').textContent=crit.length;document.getElementById('cWeek').textContent=rows.filter(l=>l.days<=7).length;document.getElementById('cMonth').textContent=rows.filter(l=>l.days<=30).length;let show;if(curRange==='today')show=crit;else if(curRange==='week')show=rows.filter(l=>l.days<=7);else show=rows.filter(l=>l.days<=30);const el=document.getElementById('alertList');if(!show.length){el.innerHTML='<div class="empty"><div class="ico">OK</div>Nada nesse período</div>';return;}el.innerHTML=show.map(l=>{const sev=severity(l.code,l.days);const dl=l.days<0?'venc.':l.days===0?'hoje':l.days+(l.days===1?' dia':' dias');return '<div class="item '+sev+'" style="cursor:pointer" onclick="openLotEdit(\''+l.id+'\')"><div class="item-main"><div class="item-name">'+l.p.name+'</div><div class="item-meta"><span class="tag">'+l.p.dept+'</span><span class="tag lote">Lote '+l.lot+'</span><span>Qtd '+l.qty+'</span></div></div><div class="item-days"><div class="d">'+(l.days<0?'!':l.days)+'</div><div class="lbl">'+dl+'</div></div></div>';}).join('');}
 function openLotEdit(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const p=db.products[l.code]||{name:l.code,dept:''};
   sheet('<h3>Editar lançamento</h3><div class="sub">'+p.name+'</div><div class="form-grid"><div class="field"><label>Número do lote *</label><input id="el_num" value="'+l.lot+'"></div><div class="two-col"><div class="field"><label>Validade *</label><input id="el_exp" type="date" value="'+l.exp+'"></div><div class="field"><label>Quantidade *</label><input id="el_qty" inputmode="numeric" value="'+l.qty+'"></div></div></div><div class="sheet-actions"><button class="btn-ghost" style="color:var(--red)" onclick="confirmDeleteLot(\''+id+'\')">Excluir</button><button class="btn-go" onclick="saveLotEdit(\''+id+'\')">Salvar</button></div>');}
-async function saveLotEdit(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const lot=document.getElementById('el_num').value.trim();const exp=document.getElementById('el_exp').value;const qty=parseInt(document.getElementById('el_qty').value)||1;if(!lot){toast('Número do lote é obrigatório','err');return;}if(!exp){toast('Informe a validade','err');return;}const {error}=await sb.from('lots').update({lot_number:lot,expiry:exp,quantity:qty}).eq('id',id);if(error){toast('Erro ao salvar','err');return;}l.lot=lot;l.exp=exp;l.qty=qty;closeSheet();renderAlerts();toast('Lançamento atualizado');}
+async function saveLotEdit(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const lot=document.getElementById('el_num').value.trim();const exp=document.getElementById('el_exp').value;const qty=parseInt(document.getElementById('el_qty').value)||1;if(!lot){toast('Número do lote é obrigatório','err');return;}if(!exp){toast('Informe a validade','err');return;}const {error}=await sb.from('lots').update({lot_number:lot,expiry:exp,quantity:qty}).eq('id',id);if(error){toast('Erro ao salvar','err');return;}l.lot=lot;l.exp=exp;l.qty=qty;updateAlertBadge();closeSheet();renderAlerts();toast('Lançamento atualizado');}
 function confirmDeleteLot(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const p=db.products[l.code]||{name:l.code};sheet('<h3>Excluir lançamento?</h3><div class="sub">'+p.name+' — Lote '+l.lot+', Qtd '+l.qty+'</div><div class="banner warn"><span>!</span><div>Esta ação não pode ser desfeita.</div></div><div class="sheet-actions"><button class="btn-ghost" onclick="openLotEdit(\''+id+'\')">Voltar</button><button class="btn-go" onclick="deleteLot(\''+id+'\')">Excluir</button></div>');}
-async function deleteLot(id){const {error}=await sb.from('lots').delete().eq('id',id);if(error){toast('Erro ao excluir','err');return;}const i=db.lots.findIndex(x=>x.id===id);if(i>=0)db.lots.splice(i,1);closeSheet();renderAlerts();toast('Lançamento excluído');}
+async function deleteLot(id){const {error}=await sb.from('lots').delete().eq('id',id);if(error){toast('Erro ao excluir','err');return;}const i=db.lots.findIndex(x=>x.id===id);if(i>=0)db.lots.splice(i,1);updateAlertBadge();closeSheet();renderAlerts();toast('Lançamento excluído');}
 function fmt(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function renderReport(){const rows=db.lots.map(l=>({...l,days:daysUntil(l.exp),p:db.products[l.code]})).filter(l=>l.p&&l.days<=30);const pend=[...new Set(rows.filter(l=>l.p.cost==null).map(l=>l.code))];const pb=document.getElementById('pendingBanner');pb.innerHTML=pend.length?'<div class="banner warn"><span>!</span><div><b>'+pend.length+' produto(s)</b> sem custo não entram no cálculo. Toque para preencher.</div></div>':'';pb.onclick=pend.length?()=>openCostFix(pend):null;const byDept={};let total=0,lots=0;rows.forEach(l=>{lots++;if(l.p.cost!=null){const v=l.p.cost*l.qty;total+=v;byDept[l.p.dept]=(byDept[l.p.dept]||0)+v;}});document.getElementById('riskVal').textContent=fmt(total);document.getElementById('riskSub').textContent=lots+' lotes monitorados';const depts=Object.entries(byDept).sort((a,b)=>b[1]-a[1]);const maxv=depts.length?depts[0][1]:1;document.getElementById('deptBars').innerHTML=depts.length?depts.map(([d,v])=>'<div class="dept-bar"><div class="head"><span class="dn">'+d+'</span><span class="dv">'+fmt(v)+'</span></div><div class="meter"><div class="fill" style="width:'+Math.max(6,v/maxv*100)+'%"></div></div><div class="dcount">'+(total?(v/total*100).toFixed(0):0)+'% do risco total</div></div>').join(''):'<div class="empty"><div class="ico">--</div>Sem dados de custo ainda</div>';}
+async function shareReport(){
+  const rows=db.lots.map(l=>({...l,days:daysUntil(l.exp),p:db.products[l.code]})).filter(l=>l.p&&l.days<=30);
+  const byDept={};let total=0;rows.forEach(l=>{if(l.p.cost!=null){const v=l.p.cost*l.qty;total+=v;byDept[l.p.dept]=(byDept[l.p.dept]||0)+v;}});
+  const depts=Object.entries(byDept).sort((a,b)=>b[1]-a[1]);
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  let txt='*Stok — Dinheiro em risco (30 dias)*\n'+session.store+' — '+hoje+'\n\nTotal em risco: '+fmt(total)+'\n';
+  if(depts.length){txt+='\nPor departamento:';depts.forEach(([d,v])=>{txt+='\n• '+d+': '+fmt(v)+(total?' ('+(v/total*100).toFixed(0)+'%)':'');});}
+  else{txt+='\nSem dados de custo ainda.';}
+  txt+='\n\nGerado pelo Stok';
+  try{if(navigator.share){await navigator.share({title:'Stok — Dinheiro em risco',text:txt});}else{await navigator.clipboard.writeText(txt);toast('Relatório copiado');}}catch(e){}
+}
 function openCostFix(codes){const f=codes.map(c=>'<div class="field"><label>'+db.products[c].name+'</label><input data-code="'+c+'" inputmode="decimal" placeholder="custo R$"></div>').join('');sheet('<h3>Cadastrar custos</h3><div class="sub">Confidencial, só o dono vê.</div><div class="form-grid">'+f+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Depois</button><button class="btn-go" onclick="saveCosts()">Salvar</button></div>');}
 async function saveCosts(){const inputs=[...document.querySelectorAll('#sheetBg input[data-code]')];for(const i of inputs){const v=i.value.replace(',','.');if(!v)continue;const cost=parseFloat(v);const code=i.dataset.code;const {error}=await sb.from('products').update({cost}).eq('id',db.products[code].id);if(error){toast('Erro ao salvar custo','err');return;}db.products[code].cost=cost;}closeSheet();renderReport();toast('Custos atualizados');}
 function renderSettings(){document.getElementById('deptList').innerHTML=db.depts.map((d,i)=>'<div class="dept-row"><span class="dname">'+d.name+'</span><input class="days" type="number" value="'+d.alertDays+'" onchange="setDeptDays('+i+',this.value)"><span class="dunit">dias</span><button class="del" onclick="delDept('+i+')">x</button></div>').join('');}

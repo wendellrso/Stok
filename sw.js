@@ -1,6 +1,6 @@
 // Service worker do Stok — cache do "casco" do app para abrir rápido e funcionar offline.
 // Os dados ao vivo (Supabase) NUNCA são cacheados: precisam estar sempre atualizados.
-const CACHE = 'stok-v1';
+const CACHE = 'stok-v2';
 const ASSETS = [
   './',
   './index.html',
