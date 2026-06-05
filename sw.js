@@ -1,6 +1,6 @@
 // Service worker do Stok — cache do "casco" do app para abrir rápido e funcionar offline.
 // Os dados ao vivo (Supabase) NUNCA são cacheados: precisam estar sempre atualizados.
-const CACHE = 'stok-v5';
+const CACHE = 'stok-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -24,10 +24,19 @@ self.addEventListener('activate', e => {
   );
 });
 
-// busca: API do Supabase passa direto pela rede; o resto é cache-first
+// busca:
+// - Supabase: sempre rede (dados ao vivo)
+// - HTML/navegação: REDE PRIMEIRO (app sempre atualizado quando online; cache só no offline)
+// - resto (libs, ícones): cache primeiro (são estáticos e pesados)
 self.addEventListener('fetch', e => {
-  if (e.request.url.includes('supabase.co')) return; // deixa a rede cuidar dos dados ao vivo
-  e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request)).catch(() => caches.match('./index.html'))
-  );
+  const req = e.request;
+  if (req.url.includes('supabase.co')) return;
+  if (req.mode === 'navigate' || req.destination === 'document') {
+    e.respondWith(
+      fetch(req).then(resp => { const c = resp.clone(); caches.open(CACHE).then(cc => cc.put(req, c)); return resp; })
+        .catch(() => caches.match(req).then(r => r || caches.match('./index.html')))
+    );
+    return;
+  }
+  e.respondWith(caches.match(req).then(r => r || fetch(req)));
 });
