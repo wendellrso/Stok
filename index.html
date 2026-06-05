@@ -178,12 +178,19 @@
     <div id="alertList"></div>
   </div>
   <div class="view hidden" id="v-report">
-    <div class="view-title">Dinheiro em risco</div>
-    <div class="view-sub">Onde seu prejuízo de validade está concentrado</div>
-    <div id="pendingBanner"></div>
-    <div class="risk-total"><div class="lbl">Em risco nos próximos 30 dias</div><div class="val" id="riskVal">R$ 0,00</div><div class="sub" id="riskSub">0 lotes</div></div>
-    <div id="deptBars"></div>
-    <button class="btn-share" onclick="shareReport()">📤 Compartilhar relatório</button>
+    <div class="view-title">Relatório</div>
+    <div class="view-sub">Risco de validade e perdas reais</div>
+    <div class="seg" id="reportSeg">
+      <button data-rep="risk" class="active" onclick="repTab('risk')">Em risco</button>
+      <button data-rep="loss" onclick="repTab('loss')">Perdas (30d)</button>
+    </div>
+    <div id="rep-risk">
+      <div id="pendingBanner"></div>
+      <div class="risk-total"><div class="lbl">Em risco nos próximos 30 dias</div><div class="val" id="riskVal">R$ 0,00</div><div class="sub" id="riskSub">0 lotes</div></div>
+      <div id="deptBars"></div>
+      <button class="btn-share" onclick="shareReport()">📤 Compartilhar relatório</button>
+    </div>
+    <div id="rep-loss" class="hidden"><div id="lossContent"></div></div>
   </div>
   <div class="view hidden" id="v-settings">
     <div class="view-title">Configurações</div>
@@ -242,7 +249,7 @@ async function doLogin(){
 }
 async function doLogout(){await sb.auth.signOut();session=null;document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');stopCam();}
 async function startApp(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=isDono?'Acesso total':'Operação';const pill=document.getElementById('tbPill');pill.textContent=isDono?'Dono':'Repositor';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();updateAlertBadge();go('scan');}
-function go(view){['scan','alerts','report','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='alerts')renderAlerts();if(view==='report')renderReport();if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
+function go(view){['scan','alerts','report','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='alerts')renderAlerts();if(view==='report')repTab('risk');if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
   const {data,error}=await sb.from('departments').select('id, name, alert_days').order('name');
   if(error){toast('Erro ao carregar departamentos','err');return;}
@@ -258,7 +265,7 @@ async function loadProducts(){
   data.forEach(p=>{db.products[p.barcode]={id:p.id,name:p.name,dept:nomePorId[p.department_id]||(db.depts[0]&&db.depts[0].name),cost:p.cost};});
 }
 async function loadLots(){
-  const {data,error}=await sb.from('lots').select('id, lot_number, expiry, quantity, products(barcode)');
+  const {data,error}=await sb.from('lots').select('id, lot_number, expiry, quantity, products(barcode)').gt('quantity',0);
   if(error){toast('Erro ao carregar lotes','err');return;}
   // a interface usa {code,lot,exp,qty}; traduzimos os nomes das colunas do banco
   db.lots=data.map(l=>({id:l.id,code:l.products?.barcode,lot:l.lot_number,exp:l.expiry,qty:l.quantity})).filter(l=>l.code);
@@ -316,7 +323,12 @@ let curRange='today';
 document.getElementById('alertSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;curRange=b.dataset.range;document.querySelectorAll('#alertSeg button').forEach(x=>x.classList.toggle('active',x===b));renderAlerts();});
 function renderAlerts(){const rows=db.lots.map(l=>({...l,days:daysUntil(l.exp),p:db.products[l.code]})).filter(l=>l.p).sort((a,b)=>a.days-b.days);const crit=rows.filter(l=>severity(l.code,l.days)==='crit');document.getElementById('cToday').textContent=crit.length;document.getElementById('cWeek').textContent=rows.filter(l=>l.days<=7).length;document.getElementById('cMonth').textContent=rows.filter(l=>l.days<=30).length;let show;if(curRange==='today')show=crit;else if(curRange==='week')show=rows.filter(l=>l.days<=7);else show=rows.filter(l=>l.days<=30);const el=document.getElementById('alertList');if(!show.length){el.innerHTML='<div class="empty"><div class="ico">OK</div>Nada nesse período</div>';return;}el.innerHTML=show.map(l=>{const sev=severity(l.code,l.days);const dl=l.days<0?'venc.':l.days===0?'hoje':l.days+(l.days===1?' dia':' dias');return '<div class="item '+sev+'" style="cursor:pointer" onclick="openLotEdit(\''+l.id+'\')"><div class="item-main"><div class="item-name">'+l.p.name+'</div><div class="item-meta"><span class="tag">'+l.p.dept+'</span><span class="tag lote">Lote '+l.lot+'</span><span>Qtd '+l.qty+'</span></div></div><div class="item-days"><div class="d">'+(l.days<0?'!':l.days)+'</div><div class="lbl">'+dl+'</div></div></div>';}).join('');}
 function openLotEdit(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const p=db.products[l.code]||{name:l.code,dept:''};
-  sheet('<h3>Editar lançamento</h3><div class="sub">'+p.name+'</div><div class="form-grid"><div class="field"><label>Número do lote *</label><input id="el_num" value="'+l.lot+'"></div><div class="two-col"><div class="field"><label>Validade *</label><input id="el_exp" type="date" value="'+l.exp+'"></div><div class="field"><label>Quantidade *</label><input id="el_qty" inputmode="numeric" value="'+l.qty+'"></div></div></div><div class="sheet-actions"><button class="btn-ghost" style="color:var(--red)" onclick="confirmDeleteLot(\''+id+'\')">Excluir</button><button class="btn-go" onclick="saveLotEdit(\''+id+'\')">Salvar</button></div>');}
+  sheet('<h3>Editar lançamento</h3><div class="sub">'+p.name+'</div><div class="form-grid"><div class="field"><label>Número do lote *</label><input id="el_num" value="'+l.lot+'"></div><div class="two-col"><div class="field"><label>Validade *</label><input id="el_exp" type="date" value="'+l.exp+'"></div><div class="field"><label>Quantidade *</label><input id="el_qty" inputmode="numeric" value="'+l.qty+'"></div></div></div><button class="btn-share" style="background:var(--green-soft);border-color:var(--green);color:#7fe9c4" onclick="openBaixa(\''+id+'\')">📦 Dar baixa neste lote</button><div class="sheet-actions"><button class="btn-ghost" style="color:var(--red)" onclick="confirmDeleteLot(\''+id+'\')">Excluir</button><button class="btn-go" onclick="saveLotEdit(\''+id+'\')">Salvar</button></div>');}
+let baixaReason='';
+function openBaixa(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const p=db.products[l.code]||{name:l.code};baixaReason='';
+  sheet('<h3>Dar baixa</h3><div class="sub">'+p.name+' — Lote '+l.lot+' (em estoque: '+l.qty+')</div><div class="field"><label>Motivo da saída</label><div class="seg" id="baixaSeg" style="margin-bottom:0"><button type="button" data-r="vendido" onclick="pickReason(this)">Vendido</button><button type="button" data-r="promovido" onclick="pickReason(this)">Promovido</button><button type="button" data-r="perdido" onclick="pickReason(this)">Perdido</button></div></div><div class="field"><label>Quantidade que saiu</label><input id="baixaQty" inputmode="numeric" value="'+l.qty+'"></div><div class="sheet-actions"><button class="btn-ghost" onclick="openLotEdit(\''+id+'\')">Voltar</button><button class="btn-go" onclick="saveBaixa(\''+id+'\')">Confirmar baixa</button></div>');}
+function pickReason(btn){baixaReason=btn.dataset.r;document.querySelectorAll('#baixaSeg button').forEach(b=>b.classList.toggle('active',b===btn));}
+async function saveBaixa(id){const l=db.lots.find(x=>x.id===id);if(!l)return;if(!baixaReason){toast('Escolha o motivo','err');return;}const qty=parseInt(document.getElementById('baixaQty').value)||0;if(qty<=0){toast('Quantidade inválida','err');return;}if(qty>l.qty){toast('Máximo disponível: '+l.qty,'err');return;}const prod=db.products[l.code];const {error}=await sb.from('baixas').insert({store_id:session.storeId,lot_id:l.id,product_id:prod.id,qty,reason:baixaReason});if(error){toast('Erro ao dar baixa','err');return;}const novo=l.qty-qty;const {error:e2}=await sb.from('lots').update({quantity:novo}).eq('id',l.id);if(e2){toast('Baixa salva, erro ao atualizar lote','err');}if(novo<=0){const i=db.lots.findIndex(x=>x.id===id);if(i>=0)db.lots.splice(i,1);}else{l.qty=novo;}updateAlertBadge();closeSheet();renderAlerts();toast('Baixa registrada');}
 async function saveLotEdit(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const lot=document.getElementById('el_num').value.trim();const exp=document.getElementById('el_exp').value;const qty=parseInt(document.getElementById('el_qty').value)||1;if(!lot){toast('Número do lote é obrigatório','err');return;}if(!exp){toast('Informe a validade','err');return;}const {error}=await sb.from('lots').update({lot_number:lot,expiry:exp,quantity:qty}).eq('id',id);if(error){toast('Erro ao salvar','err');return;}l.lot=lot;l.exp=exp;l.qty=qty;updateAlertBadge();closeSheet();renderAlerts();toast('Lançamento atualizado');}
 function confirmDeleteLot(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const p=db.products[l.code]||{name:l.code};sheet('<h3>Excluir lançamento?</h3><div class="sub">'+p.name+' — Lote '+l.lot+', Qtd '+l.qty+'</div><div class="banner warn"><span>!</span><div>Esta ação não pode ser desfeita.</div></div><div class="sheet-actions"><button class="btn-ghost" onclick="openLotEdit(\''+id+'\')">Voltar</button><button class="btn-go" onclick="deleteLot(\''+id+'\')">Excluir</button></div>');}
 async function deleteLot(id){const {error}=await sb.from('lots').delete().eq('id',id);if(error){toast('Erro ao excluir','err');return;}const i=db.lots.findIndex(x=>x.id===id);if(i>=0)db.lots.splice(i,1);updateAlertBadge();closeSheet();renderAlerts();toast('Lançamento excluído');}
@@ -332,6 +344,19 @@ async function shareReport(){
   else{txt+='\nSem dados de custo ainda.';}
   txt+='\n\nGerado pelo Stok';
   try{if(navigator.share){await navigator.share({title:'Stok — Dinheiro em risco',text:txt});}else{await navigator.clipboard.writeText(txt);toast('Relatório copiado');}}catch(e){}
+}
+function repTab(t){document.getElementById('rep-risk').classList.toggle('hidden',t!=='risk');document.getElementById('rep-loss').classList.toggle('hidden',t!=='loss');document.querySelectorAll('#reportSeg button').forEach(b=>b.classList.toggle('active',b.dataset.rep===t));if(t==='risk')renderReport();else renderLoss();}
+async function renderLoss(){const el=document.getElementById('lossContent');el.innerHTML='<div class="empty">Carregando...</div>';
+  const since=new Date(Date.now()-30*86400000).toISOString();
+  const {data,error}=await sb.from('baixas').select('qty, reason, product_id, created_at').gte('created_at',since);
+  if(error){el.innerHTML='<div class="empty">Erro ao carregar perdas</div>';return;}
+  const byId={};Object.values(db.products).forEach(p=>byId[p.id]=p);// product_id -> {dept,cost}
+  let perda=0;const perdaDept={};let uV=0,uP=0,uL=0;
+  data.forEach(b=>{const p=byId[b.product_id];if(b.reason==='vendido')uV+=b.qty;else if(b.reason==='promovido')uP+=b.qty;else if(b.reason==='perdido'){uL+=b.qty;if(p&&p.cost!=null){const v=p.cost*b.qty;perda+=v;perdaDept[p.dept]=(perdaDept[p.dept]||0)+v;}}});
+  const depts=Object.entries(perdaDept).sort((a,b)=>b[1]-a[1]);const maxv=depts.length?depts[0][1]:1;
+  el.innerHTML='<div class="risk-total"><div class="lbl">Perdido nos últimos 30 dias</div><div class="val">'+fmt(perda)+'</div><div class="sub">'+uL+' unidades descartadas</div></div>'+
+    '<div class="sec"><h4>Movimentação (unidades)</h4><div class="imp-summary"><div class="ln new"><span>Vendido</span><b>'+uV+'</b></div><div class="ln upd"><span>Promovido</span><b>'+uP+'</b></div><div class="ln"><span style="color:var(--red)">Perdido</span><b>'+uL+'</b></div></div></div>'+
+    (depts.length?'<div class="sec"><h4>Perda por departamento</h4>'+depts.map(([d,v])=>'<div class="dept-bar"><div class="head"><span class="dn">'+d+'</span><span class="dv">'+fmt(v)+'</span></div><div class="meter"><div class="fill" style="width:'+Math.max(6,v/maxv*100)+'%"></div></div><div class="dcount">'+(perda?(v/perda*100).toFixed(0):0)+'% da perda total</div></div>').join('')+'</div>':'<div class="empty"><div class="ico">👏</div>Nenhuma perda registrada no período</div>');
 }
 function openCostFix(codes){const f=codes.map(c=>'<div class="field"><label>'+db.products[c].name+'</label><input data-code="'+c+'" inputmode="decimal" placeholder="custo R$"></div>').join('');sheet('<h3>Cadastrar custos</h3><div class="sub">Confidencial, só o dono vê.</div><div class="form-grid">'+f+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Depois</button><button class="btn-go" onclick="saveCosts()">Salvar</button></div>');}
 async function saveCosts(){const inputs=[...document.querySelectorAll('#sheetBg input[data-code]')];for(const i of inputs){const v=i.value.replace(',','.');if(!v)continue;const cost=parseFloat(v);const code=i.dataset.code;const {error}=await sb.from('products').update({cost}).eq('id',db.products[code].id);if(error){toast('Erro ao salvar custo','err');return;}db.products[code].cost=cost;}closeSheet();renderReport();toast('Custos atualizados');}
