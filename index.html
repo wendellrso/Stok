@@ -157,7 +157,7 @@
     <div class="field"><label>E-mail</label><input id="loginEmail" type="email" placeholder="voce@loja.com" autocomplete="username"></div>
     <div class="field"><label>Senha</label><input id="loginPass" type="password" placeholder="********" autocomplete="current-password"></div>
     <button class="btn-primary" onclick="doLogin()">Entrar</button>
-    <div class="login-hint">Recebeu um <b>convite</b>? <span style="color:var(--accent);cursor:pointer" onclick="showSignup()">Criar conta</span></div>
+    <div class="login-hint">Esqueceu a senha? <span style="color:var(--accent);cursor:pointer" onclick="forgotPassword()">Recuperar</span><br>Recebeu um <b>convite</b>? <span style="color:var(--accent);cursor:pointer" onclick="showSignup()">Criar conta</span></div>
   </div>
   <div id="signupForm" class="hidden">
     <div class="field"><label>Código do convite</label><input id="suCode" placeholder="ex: K7P2" autocapitalize="characters"></div>
@@ -288,6 +288,23 @@ async function carregarPerfilEIniciar(userId,email){
 // ===== Cadastro por convite =====
 function showSignup(){document.getElementById('loginForm').classList.add('hidden');document.getElementById('signupForm').classList.remove('hidden');}
 function showLogin(){document.getElementById('signupForm').classList.add('hidden');document.getElementById('loginForm').classList.remove('hidden');}
+async function forgotPassword(){
+  const email=document.getElementById('loginEmail').value.trim().toLowerCase();
+  if(!email){toast('Digite seu e-mail no campo acima primeiro','err');return;}
+  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+  if(error){toast('Erro ao enviar o link','err');return;}
+  toast('Link de recuperação enviado ao seu e-mail');
+}
+function showResetPassword(){sheet('<h3>Nova senha</h3><div class="sub">Defina uma nova senha para sua conta.</div><div class="field"><label>Nova senha</label><input id="rp_pass" type="password" placeholder="mín. 6 caracteres"></div><div class="sheet-actions"><button class="btn-go" onclick="saveNewPassword()">Salvar senha</button></div>');}
+async function saveNewPassword(){
+  const pass=document.getElementById('rp_pass').value;
+  if(!pass||pass.length<6){toast('Senha: mínimo 6 caracteres','err');return;}
+  const {error}=await sb.auth.updateUser({password:pass});
+  if(error){toast('Erro ao atualizar senha','err');return;}
+  closeSheet();await sb.auth.signOut();toast('Senha atualizada ✓ Entre novamente');
+}
+// quando o usuário volta pelo link de recuperação do e-mail, abre a tela de nova senha
+sb.auth.onAuthStateChange((event)=>{if(event==='PASSWORD_RECOVERY')showResetPassword();});
 async function doSignup(){
   const code=document.getElementById('suCode').value.trim().toUpperCase();
   const name=document.getElementById('suName').value.trim();
@@ -329,12 +346,18 @@ async function loadDepts(){
   db.depts=data.map(d=>({id:d.id,name:d.name,alertDays:d.alert_days}));
 }
 async function loadProducts(){
-  const {data,error}=await sb.from('products').select('id, barcode, name, department_id, cost');
+  const {data,error}=await sb.from('products').select('id, barcode, name, department_id');
   if(error){toast('Erro ao carregar produtos','err');return;}
   // a interface usa nome do departamento; convertemos department_id -> nome usando os depts já carregados
   const nomePorId={};db.depts.forEach(d=>nomePorId[d.id]=d.name);
   db.products={};
-  data.forEach(p=>{db.products[p.barcode]={id:p.id,name:p.name,dept:nomePorId[p.department_id]||(db.depts[0]&&db.depts[0].name),cost:p.cost};});
+  data.forEach(p=>{db.products[p.barcode]={id:p.id,name:p.name,dept:nomePorId[p.department_id]||(db.depts[0]&&db.depts[0].name),cost:null};});
+  // custo vem de tabela protegida (product_costs): só o admin recebe; operador nunca (nem pela API)
+  if(session.role==='dono'){
+    const idToBc={};Object.entries(db.products).forEach(([bc,p])=>idToBc[p.id]=bc);
+    const {data:costs}=await sb.from('product_costs').select('product_id, cost');
+    (costs||[]).forEach(c=>{const bc=idToBc[c.product_id];if(bc)db.products[bc].cost=c.cost;});
+  }
 }
 async function loadLots(){
   const {data,error}=await sb.from('lots').select('id, lot_number, expiry, quantity, created_at, created_by, products(barcode)').gt('quantity',0).order('created_at',{ascending:false});
@@ -408,8 +431,9 @@ function openNewProductSheet(code){const isDono=session.role==='dono';const cost
   sheet('<h3>Produto novo</h3><div class="sub">Código não está no cadastro. Registre uma vez.</div><div class="card-code">'+code+'</div><div class="form-grid"><div class="field"><label>Nome do produto</label><input id="np_name" placeholder="ex: Leite Cond. Moça 395g"></div><div class="field"><label>Departamento</label><select id="np_dept">'+deptOptions(db.depts[0]&&db.depts[0].name)+'</select></div>'+costField+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="saveNewProduct(\''+code+'\')">Continuar</button></div>');}
 async function saveNewProduct(code){const name=document.getElementById('np_name').value.trim();if(!name){toast('Informe o nome','err');return;}const dept=document.getElementById('np_dept').value;let cost=null;if(session.role==='dono'){const c=document.getElementById('np_cost').value.replace(',','.');cost=c?parseFloat(c):null;}
   const d=db.depts.find(x=>x.name===dept);// achar o id do departamento escolhido
-  const {data,error}=await sb.from('products').insert({store_id:session.storeId,barcode:code,name,department_id:d?d.id:null,cost}).select('id').single();
+  const {data,error}=await sb.from('products').insert({store_id:session.storeId,barcode:code,name,department_id:d?d.id:null}).select('id').single();
   if(error){toast('Erro ao salvar produto','err');return;}
+  if(session.role==='dono'&&cost!=null){await sb.from('product_costs').upsert({product_id:data.id,store_id:session.storeId,cost});}
   db.products[code]={id:data.id,name,dept,cost};// guarda o id devolvido pra o lote usar
   openLotSheet(code);}
 function openLotSheet(code){const p=db.products[code];const today=new Date().toISOString().slice(0,10);const pend=(p.cost==null&&session.role==='dono')?'<div class="banner warn" style="margin-bottom:14px"><span>!</span><div>Sem custo cadastrado. Defina no relatório.</div></div>':'';
@@ -418,7 +442,7 @@ function openProductEdit(code){const p=db.products[code];const isDono=session.ro
   const valCusto=p.cost!=null?String(p.cost).replace('.',','):'';
   const costField=isDono?'<div class="field"><label>Custo unitário (R$)</label><input id="pe_cost" inputmode="decimal" value="'+valCusto+'" placeholder="ex: 3,80"></div>':'<div class="field"><label>Custo unitário</label><div style="padding:13px 14px;background:var(--panel2);border:1px dashed var(--line);border-radius:10px;color:var(--dim);font-size:13px"><span class="lock">Definido pelo admin</span></div></div>';
   sheet('<h3>Editar produto</h3><div class="sub">'+code+'</div><div class="form-grid"><div class="field"><label>Nome do produto</label><input id="pe_name" value="'+p.name.replace(/"/g,'&quot;')+'"></div><div class="field"><label>Departamento</label><select id="pe_dept">'+deptOptions(p.dept)+'</select></div>'+costField+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="openLotSheet(\''+code+'\')">Voltar</button><button class="btn-go" onclick="saveProductEdit(\''+code+'\')">Salvar</button></div>');}
-async function saveProductEdit(code){const p=db.products[code];const name=document.getElementById('pe_name').value.trim();if(!name){toast('Informe o nome','err');return;}const dept=document.getElementById('pe_dept').value;const d=db.depts.find(x=>x.name===dept);const patch={name,department_id:d?d.id:null};if(session.role==='dono'){const c=document.getElementById('pe_cost').value.replace(',','.');patch.cost=c?parseFloat(c):null;}const {error}=await sb.from('products').update(patch).eq('id',p.id);if(error){toast('Erro ao salvar produto','err');return;}p.name=name;p.dept=dept;if(session.role==='dono')p.cost=patch.cost;toast('Produto atualizado');openLotSheet(code);}
+async function saveProductEdit(code){const p=db.products[code];const name=document.getElementById('pe_name').value.trim();if(!name){toast('Informe o nome','err');return;}const dept=document.getElementById('pe_dept').value;const d=db.depts.find(x=>x.name===dept);const {error}=await sb.from('products').update({name,department_id:d?d.id:null}).eq('id',p.id);if(error){toast('Erro ao salvar produto','err');return;}p.name=name;p.dept=dept;if(session.role==='dono'){const c=document.getElementById('pe_cost').value.replace(',','.');const cost=c?parseFloat(c):null;const {error:ce}=await sb.from('product_costs').upsert({product_id:p.id,store_id:session.storeId,cost});if(ce){toast('Erro ao salvar custo','err');return;}p.cost=cost;}toast('Produto atualizado');openLotSheet(code);}
 async function saveLot(code){const lot=document.getElementById('lot_num').value.trim();const exp=document.getElementById('lot_exp').value;const qty=parseInt(document.getElementById('lot_qty').value)||1;if(!lot){toast('Número do lote é obrigatório','err');return;}if(!exp){toast('Informe a validade','err');return;}
   const prod=db.products[code];if(!prod){toast('Produto não encontrado','err');return;}
   const ex=db.lots.find(l=>l.code===code&&l.lot===lot&&l.exp===exp);// mesmo produto+lote+validade já existe?
@@ -476,7 +500,7 @@ function openMovDetail(reason){
   sheet('<h3>'+labels[reason]+'</h3><div class="sub">Top 10 por valor (custo) — últimos 30 dias<br>'+nProd+' produtos · '+totUn+' un. · '+fmt(totVal)+'</div>'+body+'<div class="sheet-actions"><button class="btn-go" onclick="closeSheet()">Fechar</button></div>');
 }
 function openCostFix(codes){const f=codes.map(c=>'<div class="field"><label>'+db.products[c].name+'</label><input data-code="'+c+'" inputmode="decimal" placeholder="custo R$"></div>').join('');sheet('<h3>Cadastrar custos</h3><div class="sub">Confidencial, só o admin vê.</div><div class="form-grid">'+f+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Depois</button><button class="btn-go" onclick="saveCosts()">Salvar</button></div>');}
-async function saveCosts(){const inputs=[...document.querySelectorAll('#sheetBg input[data-code]')];for(const i of inputs){const v=i.value.replace(',','.');if(!v)continue;const cost=parseFloat(v);const code=i.dataset.code;const {error}=await sb.from('products').update({cost}).eq('id',db.products[code].id);if(error){toast('Erro ao salvar custo','err');return;}db.products[code].cost=cost;}closeSheet();renderReport();toast('Custos atualizados');}
+async function saveCosts(){const inputs=[...document.querySelectorAll('#sheetBg input[data-code]')];for(const i of inputs){const v=i.value.replace(',','.');if(!v)continue;const cost=parseFloat(v);const code=i.dataset.code;const {error}=await sb.from('product_costs').upsert({product_id:db.products[code].id,store_id:session.storeId,cost});if(error){toast('Erro ao salvar custo','err');return;}db.products[code].cost=cost;}closeSheet();renderReport();toast('Custos atualizados');}
 function renderSettings(){document.getElementById('deptList').innerHTML=db.depts.map((d,i)=>'<div class="dept-row"><span class="dname">'+d.name+'</span><input class="days" type="number" value="'+d.alertDays+'" onchange="setDeptDays('+i+',this.value)"><span class="dunit">dias</span><button class="del" onclick="delDept('+i+')">x</button></div>').join('');renderTeamAreas();}
 let teamAssign={};
 async function renderTeamAreas(){
@@ -509,8 +533,8 @@ async function commitImport(){const parsed=window._impParsed||[];
   const idPorNome={};db.depts.forEach(d=>idPorNome[d.name.toLowerCase()]=d.id);const deptPadrao=db.depts[0];
   // 2) sincronizar produtos: atualiza os que existem, insere os novos, não toca no resto
   for(const r of parsed){const deptName=r.dept||(deptPadrao&&deptPadrao.name);const deptId=idPorNome[(r.dept||'').toLowerCase()]||(deptPadrao&&deptPadrao.id);const ex=db.products[r.code];
-    if(ex){const patch={name:r.name};if(r.dept)patch.department_id=deptId;if(r.cost!=null)patch.cost=r.cost;const {error}=await sb.from('products').update(patch).eq('id',ex.id);if(error){toast('Erro ao atualizar '+r.code,'err');return;}ex.name=r.name;if(r.dept)ex.dept=deptName;if(r.cost!=null)ex.cost=r.cost;}
-    else{const {data,error}=await sb.from('products').insert({store_id:session.storeId,barcode:r.code,name:r.name,department_id:deptId,cost:r.cost}).select('id').single();if(error){toast('Erro ao inserir '+r.code,'err');return;}db.products[r.code]={id:data.id,name:r.name,dept:deptName,cost:r.cost};}}
+    if(ex){const patch={name:r.name};if(r.dept)patch.department_id=deptId;const {error}=await sb.from('products').update(patch).eq('id',ex.id);if(error){toast('Erro ao atualizar '+r.code,'err');return;}ex.name=r.name;if(r.dept)ex.dept=deptName;if(r.cost!=null){await sb.from('product_costs').upsert({product_id:ex.id,store_id:session.storeId,cost:r.cost});ex.cost=r.cost;}}
+    else{const {data,error}=await sb.from('products').insert({store_id:session.storeId,barcode:r.code,name:r.name,department_id:deptId}).select('id').single();if(error){toast('Erro ao inserir '+r.code,'err');return;}if(r.cost!=null)await sb.from('product_costs').upsert({product_id:data.id,store_id:session.storeId,cost:r.cost});db.products[r.code]={id:data.id,name:r.name,dept:deptName,cost:r.cost};}}
   closeSheet();renderSettings();toast(parsed.length+' produtos sincronizados');}
 // ===== Notificações push (Fase 1: inscrição) =====
 function pushSuportado(){return ('Notification' in window)&&('serviceWorker' in navigator)&&('PushManager' in window);}
