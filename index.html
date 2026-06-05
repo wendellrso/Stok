@@ -261,7 +261,7 @@ async function doLogin(){
   startApp();
 }
 async function doLogout(){await sb.auth.signOut();session=null;document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');stopCam();}
-async function startApp(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();updateAlertBadge();go('scan');}
+async function startApp(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();updateAlertBadge();syncPush();go('scan');}
 function go(view){['scan','alerts','report','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('risk');if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
   const {data,error}=await sb.from('departments').select('id, name, alert_days').order('name');
@@ -418,6 +418,17 @@ async function commitImport(){const parsed=window._impParsed||[];
 function pushSuportado(){return ('Notification' in window)&&('serviceWorker' in navigator)&&('PushManager' in window);}
 function refreshNotifBanner(){const nb=document.getElementById('notifBanner');if(!nb)return;if(!pushSuportado()||Notification.permission==='granted'){nb.innerHTML='';return;}nb.innerHTML='<div class="banner info" style="cursor:pointer" onclick="enableNotif()"><span>🔔</span><div>Ativar avisos diários de vencimento neste aparelho</div></div>';}
 function b64ToUint8(b64){const pad='='.repeat((4-b64.length%4)%4);const base=(b64+pad).replace(/-/g,'+').replace(/_/g,'/');const raw=atob(base);const arr=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);return arr;}
+// re-sincroniza a inscrição a cada login (se a permissão já foi dada) — mantém o banco sempre atualizado
+async function syncPush(){
+  if(!pushSuportado()||Notification.permission!=='granted')return;
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToUint8(VAPID_PUBLIC)});
+    const j=sub.toJSON();
+    await sb.from('push_subscriptions').upsert({store_id:session.storeId,profile_id:session.userId,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth},{onConflict:'endpoint'});
+  }catch(e){}
+}
 async function enableNotif(){
   if(!pushSuportado()){toast('Notificações não suportadas aqui','err');return;}
   const perm=await Notification.requestPermission();
