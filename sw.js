@@ -1,12 +1,13 @@
 // Service worker do Stok — cache do "casco" do app para abrir rápido e funcionar offline.
 // Os dados ao vivo (Supabase) NUNCA são cacheados: precisam estar sempre atualizados.
-const CACHE = 'stok-v13';
+const CACHE = 'stok-v14';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
+  './icon-badge.png',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'
 ];
@@ -45,7 +46,7 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let data = { title: 'Stok', body: 'Você tem produtos vencendo.' };
   try { if (e.data) data = Object.assign(data, e.data.json()); } catch (_) { if (e.data) data.body = e.data.text(); }
-  e.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: './icon-192.png', badge: './icon-192.png', tag: 'stok-vencimentos', renotify: true, data: { url: './' } }));
+  e.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: './icon-192.png', badge: './icon-badge.png', tag: 'stok-vencimentos', renotify: true, data: { url: './' } }));
 });
 // ao tocar na notificação, foca/abre o app
 self.addEventListener('notificationclick', e => {
