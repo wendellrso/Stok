@@ -173,6 +173,7 @@
     <div><div class="store" id="tbStore">Mercado Modelo</div><div class="role" id="tbRole">-</div></div>
     <div class="who"><span class="pill" id="tbPill"></span><button class="logout" onclick="doLogout()">Sair</button></div>
   </div>
+  <div id="subBanner" style="padding:0 18px"></div>
   <div class="view" id="v-scan">
     <div class="view-title">Lançar lote</div>
     <div class="view-sub">Escaneie o produto para registrar um lote</div>
@@ -253,6 +254,14 @@
     <button data-view="settings" id="navSettings" onclick="go('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 00-1.7-1L14.5 2h-5l-.3 2.5a7 7 0 00-1.7 1l-2.4-1-2 3.5L2.6 11a7 7 0 000 2l-2 1.5 2 3.5 2.4-1a7 7 0 001.7 1L9.5 22h5l.3-2.5a7 7 0 001.7-1l2.4 1 2-3.5-2-1.5a7 7 0 00.1-1z"/></svg>Config</button>
   </div>
 </div>
+<div id="blocked" class="hidden" style="min-height:100dvh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:32px;max-width:440px;margin:0 auto">
+  <div class="brand">Sto<span>k</span></div>
+  <div style="font-size:52px;margin:18px 0">🔒</div>
+  <div class="view-title">Assinatura vencida</div>
+  <p style="color:var(--muted);margin:12px 0 18px">A loja <b id="blkStore"></b> está com a assinatura vencida. Regularize para voltar a usar o Stok.<br><br><b>Seus dados estão guardados</b> — nada foi perdido.</p>
+  <p style="color:var(--dim);font-size:13px">Fale com o suporte para regularizar o pagamento.</p>
+  <button class="logout" style="margin-top:22px" onclick="doLogout()">Sair</button>
+</div>
 <script>
 // ===== Conexão com o Supabase (Semana 2) =====
 const SUPABASE_URL='https://glxtrrjqopwjvpzmzxot.supabase.co';
@@ -276,13 +285,13 @@ async function doLogin(){
 async function carregarPerfilEIniciar(userId,email){
   const {data:profile,error:profErr}=await sb
     .from('profiles')
-    .select('name, role, store_id, stores(name)')
+    .select('name, role, store_id, stores(name, paid_until)')
     .eq('id',userId)
     .single();
   if(profErr||!profile){toast('Perfil não encontrado para este usuário','err');return;}
-  // traduz o papel do banco (admin/operador) para o da interface (dono/repo)
+  // traduz o papel do banco (admin/operador) para a interface (dono/repo)
   const role=profile.role==='admin'?'dono':'repo';
-  session={email,role,name:profile.name,userId,storeId:profile.store_id,store:profile.stores?.name||'Minha loja'};
+  session={email,role,name:profile.name,userId,storeId:profile.store_id,store:profile.stores?.name||'Minha loja',paidUntil:profile.stores?.paid_until||null};
   startApp();
 }
 // ===== Cadastro por convite =====
@@ -336,8 +345,20 @@ async function gerarConvite(){
   sheet('<h3>Convite criado</h3><div class="sub">Mande o código ou o link para a pessoa. Vale uma vez, expira em 7 dias.</div><div class="card-code" style="font-size:24px;text-align:center;letter-spacing:4px;margin:14px 0">'+code+'</div><button class="btn-share" onclick="shareInvite(\''+code+'\')">📤 Compartilhar convite</button><div class="sheet-actions"><button class="btn-go" onclick="closeSheet()">Pronto</button></div>');
 }
 async function shareInvite(code){const link=location.origin+location.pathname+'?convite='+code;const txt='Você foi convidado para o Stok!\nCódigo: '+code+'\nOu abra: '+link;try{if(navigator.share){await navigator.share({title:'Convite Stok',text:txt});}else{await navigator.clipboard.writeText(txt);toast('Convite copiado');}}catch(e){}}
-async function doLogout(){await sb.auth.signOut();session=null;document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');showLogin();stopCam();}
-async function startApp(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();updateAlertBadge();syncPush();go('scan');}
+async function doLogout(){await sb.auth.signOut();session=null;document.getElementById('app').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('login').classList.remove('hidden');showLogin();stopCam();}
+// status da assinatura a partir de paid_until (com 5 dias de tolerância antes de bloquear)
+function subStatus(){
+  if(!session.paidUntil)return {state:'ok'};
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  const pu=new Date(session.paidUntil+'T00:00:00');
+  const dias=Math.round((pu-hoje)/86400000);const graca=5;
+  if(dias<-graca)return {state:'blocked'};
+  if(dias<0)return {state:'warn',vencida:true,restante:graca+dias};
+  if(dias<=5)return {state:'warn',vencida:false,dias};
+  return {state:'ok'};
+}
+function showBlocked(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.add('hidden');document.getElementById('blocked').classList.remove('hidden');document.getElementById('blkStore').textContent=session.store||'';stopCam();}
+async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();updateAlertBadge();syncPush();go('scan');}
 function go(view){['scan','alerts','report','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('risk');if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
   const {data,error}=await sb.from('departments').select('id, name, alert_days').order('name');
