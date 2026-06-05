@@ -177,6 +177,7 @@
   <div class="view" id="v-scan">
     <div class="view-title">Lançar lote</div>
     <div class="view-sub">Escaneie o produto para registrar um lote</div>
+    <div id="onboard"></div>
     <div id="scanStats"></div>
     <div id="notifBanner"></div>
     <div id="scanArea">
@@ -229,6 +230,7 @@
         <p>Convide um operador ou admin para esta loja. Ele cria a conta com o código e já entra amarrado à sua loja.</p>
         <button class="btn-up" style="width:100%" onclick="openInvite()">Convidar para a loja</button>
       </div>
+      <div id="pendingInvites"></div>
     </div>
     <div class="sec">
       <h4>Áreas dos operadores</h4>
@@ -409,6 +411,16 @@ function severity(code,days){const p=db.products[code];const limit=p?deptAlert(p
 function updateAlertBadge(){const n=db.lots.filter(l=>db.products[l.code]&&lotVisivel(l)&&severity(l.code,daysUntil(l.exp))==='crit').length;const b=document.getElementById('alertBadge');if(!b)return;b.textContent=n>99?'99+':n;b.classList.toggle('hidden',n===0);}
 // enriquece a aba Lançar: resumo (lotes ativos / críticos) + últimos lançamentos
 function renderScan(){
+  const ob=document.getElementById('onboard');
+  if(ob){
+    if(session.role==='dono'){
+      const temD=db.depts.length>0,temP=Object.keys(db.products).length>0,temO=Object.values(db.profiles).some(p=>p.role==='operador');
+      if(!temD||!temP||!temO){
+        const ln=(ok,txt)=>'<div onclick="go(\'settings\')" style="display:flex;align-items:center;gap:9px;padding:5px 0;cursor:pointer"><span style="color:'+(ok?'var(--green)':'var(--muted)')+';font-weight:800">'+(ok?'✓':'○')+'</span><span style="'+(ok?'color:var(--dim);text-decoration:line-through':'')+'">'+txt+'</span></div>';
+        ob.innerHTML='<div class="imp-box" style="text-align:left;margin-bottom:14px"><div style="font-weight:700;margin-bottom:6px">👋 Comece por aqui</div>'+ln(temD,'Crie seus departamentos')+ln(temP,'Cadastre ou importe seus produtos')+ln(temO,'Convide sua equipe')+'</div>';
+      }else ob.innerHTML='';
+    }else ob.innerHTML='';
+  }
   const lots=db.lots.filter(l=>db.products[l.code]&&lotVisivel(l));
   const ativos=lots.length;
   const crit=lots.filter(l=>{const d=daysUntil(l.exp);return d>=0&&severity(l.code,d)==='crit';}).length;// a vencer (ainda dá pra agir)
@@ -522,7 +534,16 @@ function openMovDetail(reason){
 }
 function openCostFix(codes){const f=codes.map(c=>'<div class="field"><label>'+db.products[c].name+'</label><input data-code="'+c+'" inputmode="decimal" placeholder="custo R$"></div>').join('');sheet('<h3>Cadastrar custos</h3><div class="sub">Confidencial, só o admin vê.</div><div class="form-grid">'+f+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Depois</button><button class="btn-go" onclick="saveCosts()">Salvar</button></div>');}
 async function saveCosts(){const inputs=[...document.querySelectorAll('#sheetBg input[data-code]')];for(const i of inputs){const v=i.value.replace(',','.');if(!v)continue;const cost=parseFloat(v);const code=i.dataset.code;const {error}=await sb.from('product_costs').upsert({product_id:db.products[code].id,store_id:session.storeId,cost});if(error){toast('Erro ao salvar custo','err');return;}db.products[code].cost=cost;}closeSheet();renderReport();toast('Custos atualizados');}
-function renderSettings(){document.getElementById('deptList').innerHTML=db.depts.map((d,i)=>'<div class="dept-row"><span class="dname">'+d.name+'</span><input class="days" type="number" value="'+d.alertDays+'" onchange="setDeptDays('+i+',this.value)"><span class="dunit">dias</span><button class="del" onclick="delDept('+i+')">x</button></div>').join('');renderTeamAreas();}
+function renderSettings(){document.getElementById('deptList').innerHTML=db.depts.map((d,i)=>'<div class="dept-row"><span class="dname">'+d.name+'</span><input class="days" type="number" value="'+d.alertDays+'" onchange="setDeptDays('+i+',this.value)"><span class="dunit">dias</span><button class="del" onclick="delDept('+i+')">x</button></div>').join('');renderTeamAreas();renderInvites();}
+async function renderInvites(){
+  const el=document.getElementById('pendingInvites');if(!el)return;
+  const {data}=await sb.from('invites').select('id, code, role, expires_at, used').eq('used',false).order('created_at',{ascending:false});
+  const ativos=(data||[]).filter(i=>new Date(i.expires_at)>=new Date());
+  if(!ativos.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="recent-h" style="margin-top:14px">Convites pendentes</div>'+ativos.map(i=>'<div class="dept-row"><span class="dname" style="font-family:monospace">'+i.code+'</span><span class="dunit">'+(i.role==='admin'?'admin':'operador')+'</span><button class="del" onclick="cancelInvite(\''+i.id+'\')">x</button></div>').join('');
+}
+async function cancelInvite(id){const {error}=await sb.from('invites').delete().eq('id',id);if(error){toast('Erro ao cancelar','err');return;}renderInvites();toast('Convite cancelado');}
+async function removeMember(id){const nome=(db.profiles[id]&&db.profiles[id].name)||'este usuário';if(!confirm('Remover '+nome+'? Ele perde o acesso à loja (os dados da loja permanecem).'))return;const {error}=await sb.rpc('remove_member',{p_profile_id:id});if(error){toast(error.message||'Erro ao remover','err');return;}await loadProfiles();renderTeamAreas();toast('Membro removido');}
 let teamAssign={};
 async function renderTeamAreas(){
   const el=document.getElementById('teamAreas');if(!el)return;
@@ -532,7 +553,7 @@ async function renderTeamAreas(){
   teamAssign={};(data||[]).forEach(a=>{(teamAssign[a.profile_id]=teamAssign[a.profile_id]||new Set()).add(a.department_id);});
   el.innerHTML=ops.map(([id,p])=>{const set=teamAssign[id]||new Set();
     const chips=db.depts.map(d=>'<span onclick="toggleArea(\''+id+'\',\''+d.id+'\')" style="cursor:pointer;display:inline-block;margin:3px;padding:5px 11px;border-radius:14px;font-size:12px;border:1px solid var(--line);'+(set.has(d.id)?'background:var(--accent);color:#04121f;font-weight:700':'background:var(--panel2);color:var(--muted)')+'">'+d.name+'</span>').join('');
-    return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px"><div style="font-weight:600;margin-bottom:6px">'+p.name+'</div><div>'+chips+'</div><div style="font-size:11px;color:var(--dim);margin-top:6px">'+(set.size?'vê só essas áreas':'sem áreas marcadas — vê a loja toda')+'</div></div>';
+    return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:600">'+p.name+'</span><button class="del" onclick="removeMember(\''+id+'\')" title="Remover">x</button></div><div>'+chips+'</div><div style="font-size:11px;color:var(--dim);margin-top:6px">'+(set.size?'vê só essas áreas':'sem áreas marcadas — vê a loja toda')+'</div></div>';
   }).join('');
 }
 async function toggleArea(profileId,deptId){
