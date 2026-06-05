@@ -167,6 +167,7 @@
     <div class="view-title">Lançar lote</div>
     <div class="view-sub">Escaneie o produto para registrar um lote</div>
     <div id="scanStats"></div>
+    <div id="notifBanner"></div>
     <div id="scanArea">
       <div class="scan-placeholder" id="scanPlaceholder">Toque em Câmera para escanear<br><small>ou digite o código abaixo</small></div>
       <video id="video" class="hidden" playsinline></video>
@@ -235,6 +236,7 @@
 const SUPABASE_URL='https://glxtrrjqopwjvpzmzxot.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdseHRycmpxb3B3anZwem16eG90Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODM2OTYsImV4cCI6MjA5NjE1OTY5Nn0.d4GlH4N1JLl-4v_XQqNUZ_zjjuqZX3lOwOVXI3J9Q74';
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const VAPID_PUBLIC='BDr-XW-q5RKU9jjir_9ZLnqwlEv1QRI8ROej9G9wQH5mBh-Tm9TlLiVKFY6hDtnU_Eh702jBXLJV6FE1XYajEyg';
 
 // cache em memória dos dados da loja; preenchido a partir do Supabase no login (loadDepts/loadProducts/loadLots)
 let db={depts:[],products:{},lots:[]};
@@ -255,7 +257,7 @@ async function doLogin(){
   if(profErr||!profile){toast('Perfil não encontrado para este usuário','err');return;}
   // 3) traduzir o papel do banco (admin/operador) para o da interface (dono/repo)
   const role=profile.role==='admin'?'dono':'repo';
-  session={email,role,name:profile.name,storeId:profile.store_id,store:profile.stores?.name||'Minha loja'};
+  session={email,role,name:profile.name,userId:auth.user.id,storeId:profile.store_id,store:profile.stores?.name||'Minha loja'};
   startApp();
 }
 async function doLogout(){await sb.auth.signOut();session=null;document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');stopCam();}
@@ -293,6 +295,7 @@ function renderScan(){
   const crit=lots.filter(l=>{const d=daysUntil(l.exp);return d>=0&&severity(l.code,d)==='crit';}).length;// a vencer (ainda dá pra agir)
   const venc=lots.filter(l=>daysUntil(l.exp)<0).length;// já venceram
   document.getElementById('scanStats').innerHTML='<div class="scan-stats"><div class="ss"><div class="ss-n">'+ativos+'</div><div class="ss-l">monitorados</div></div><div class="ss"><div class="ss-n" style="color:'+(crit?'var(--amber)':'var(--green)')+'">'+crit+'</div><div class="ss-l">críticos</div></div><div class="ss"><div class="ss-n" style="color:'+(venc?'var(--red)':'var(--green)')+'">'+venc+'</div><div class="ss-l">vencidos</div></div></div>';
+  refreshNotifBanner();
   const recent=[...db.lots].filter(l=>db.products[l.code]).sort((a,b)=>(b.created||'').localeCompare(a.created||'')).slice(0,6);
   const el=document.getElementById('recentLots');
   if(!recent.length){el.innerHTML='';return;}
@@ -411,6 +414,23 @@ async function commitImport(){const parsed=window._impParsed||[];
     if(ex){const patch={name:r.name};if(r.dept)patch.department_id=deptId;if(r.cost!=null)patch.cost=r.cost;const {error}=await sb.from('products').update(patch).eq('id',ex.id);if(error){toast('Erro ao atualizar '+r.code,'err');return;}ex.name=r.name;if(r.dept)ex.dept=deptName;if(r.cost!=null)ex.cost=r.cost;}
     else{const {data,error}=await sb.from('products').insert({store_id:session.storeId,barcode:r.code,name:r.name,department_id:deptId,cost:r.cost}).select('id').single();if(error){toast('Erro ao inserir '+r.code,'err');return;}db.products[r.code]={id:data.id,name:r.name,dept:deptName,cost:r.cost};}}
   closeSheet();renderSettings();toast(parsed.length+' produtos sincronizados');}
+// ===== Notificações push (Fase 1: inscrição) =====
+function pushSuportado(){return ('Notification' in window)&&('serviceWorker' in navigator)&&('PushManager' in window);}
+function refreshNotifBanner(){const nb=document.getElementById('notifBanner');if(!nb)return;if(!pushSuportado()||Notification.permission==='granted'){nb.innerHTML='';return;}nb.innerHTML='<div class="banner info" style="cursor:pointer" onclick="enableNotif()"><span>🔔</span><div>Ativar avisos diários de vencimento neste aparelho</div></div>';}
+function b64ToUint8(b64){const pad='='.repeat((4-b64.length%4)%4);const base=(b64+pad).replace(/-/g,'+').replace(/_/g,'/');const raw=atob(base);const arr=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);return arr;}
+async function enableNotif(){
+  if(!pushSuportado()){toast('Notificações não suportadas aqui','err');return;}
+  const perm=await Notification.requestPermission();
+  if(perm!=='granted'){toast('Permissão negada','err');refreshNotifBanner();return;}
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToUint8(VAPID_PUBLIC)});
+    const j=sub.toJSON();
+    const {error}=await sb.from('push_subscriptions').upsert({store_id:session.storeId,profile_id:session.userId,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth},{onConflict:'endpoint'});
+    if(error){toast('Erro ao salvar inscrição','err');return;}
+    toast('Avisos ativados ✓');refreshNotifBanner();
+  }catch(e){toast('Não foi possível ativar os avisos','err');}
+}
 function toast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='err'?' err':'');t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2400);}
 document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 // registra o service worker (PWA instalável + offline básico)

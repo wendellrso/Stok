@@ -1,6 +1,6 @@
 // Service worker do Stok — cache do "casco" do app para abrir rápido e funcionar offline.
 // Os dados ao vivo (Supabase) NUNCA são cacheados: precisam estar sempre atualizados.
-const CACHE = 'stok-v10';
+const CACHE = 'stok-v11';
 const ASSETS = [
   './',
   './index.html',
@@ -39,4 +39,19 @@ self.addEventListener('fetch', e => {
     return;
   }
   e.respondWith(caches.match(req).then(r => r || fetch(req)));
+});
+
+// recebe a notificação push e a exibe
+self.addEventListener('push', e => {
+  let data = { title: 'Stok', body: 'Você tem produtos vencendo.' };
+  try { if (e.data) data = Object.assign(data, e.data.json()); } catch (_) { if (e.data) data.body = e.data.text(); }
+  e.waitUntil(self.registration.showNotification(data.title, { body: data.body, icon: './icon-192.png', badge: './icon-192.png', data: { url: './' } }));
+});
+// ao tocar na notificação, foca/abre o app
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
+    for (const w of ws) { if ('focus' in w) return w.focus(); }
+    if (clients.openWindow) return clients.openWindow('./');
+  }));
 });
