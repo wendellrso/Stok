@@ -286,9 +286,11 @@ function severity(code,days){const p=db.products[code];const limit=p?deptAlert(p
 function updateAlertBadge(){const n=db.lots.filter(l=>db.products[l.code]&&severity(l.code,daysUntil(l.exp))==='crit').length;const b=document.getElementById('alertBadge');if(!b)return;b.textContent=n>99?'99+':n;b.classList.toggle('hidden',n===0);}
 // enriquece a aba Lançar: resumo (lotes ativos / críticos) + últimos lançamentos
 function renderScan(){
-  const ativos=db.lots.filter(l=>db.products[l.code]).length;
-  const crit=db.lots.filter(l=>db.products[l.code]&&severity(l.code,daysUntil(l.exp))==='crit').length;
-  document.getElementById('scanStats').innerHTML='<div class="scan-stats"><div class="ss"><div class="ss-n">'+ativos+'</div><div class="ss-l">lotes ativos</div></div><div class="ss"><div class="ss-n" style="color:'+(crit?'var(--red)':'var(--green)')+'">'+crit+'</div><div class="ss-l">críticos</div></div></div>';
+  const lots=db.lots.filter(l=>db.products[l.code]);
+  const ativos=lots.length;
+  const crit=lots.filter(l=>{const d=daysUntil(l.exp);return d>=0&&severity(l.code,d)==='crit';}).length;// a vencer (ainda dá pra agir)
+  const venc=lots.filter(l=>daysUntil(l.exp)<0).length;// já venceram
+  document.getElementById('scanStats').innerHTML='<div class="scan-stats"><div class="ss"><div class="ss-n">'+ativos+'</div><div class="ss-l">monitorados</div></div><div class="ss"><div class="ss-n" style="color:'+(crit?'var(--amber)':'var(--green)')+'">'+crit+'</div><div class="ss-l">críticos</div></div><div class="ss"><div class="ss-n" style="color:'+(venc?'var(--red)':'var(--green)')+'">'+venc+'</div><div class="ss-l">vencidos</div></div></div>';
   const recent=[...db.lots].filter(l=>db.products[l.code]).sort((a,b)=>(b.created||'').localeCompare(a.created||'')).slice(0,6);
   const el=document.getElementById('recentLots');
   if(!recent.length){el.innerHTML='';return;}
