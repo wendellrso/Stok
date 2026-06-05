@@ -153,10 +153,20 @@
 <div id="login">
   <div class="brand">Sto<span>k</span></div>
   <div class="brand-sub">Controle de validade para o varejo</div>
-  <div class="field"><label>E-mail</label><input id="loginEmail" type="email" placeholder="voce@loja.com" autocomplete="username"></div>
-  <div class="field"><label>Senha</label><input id="loginPass" type="password" placeholder="********" autocomplete="current-password"></div>
-  <button class="btn-primary" onclick="doLogin()">Entrar</button>
-  <div class="login-hint">Entre com o <b>e-mail e senha</b> da sua loja. Não tem acesso? Fale com o administrador.</div>
+  <div id="loginForm">
+    <div class="field"><label>E-mail</label><input id="loginEmail" type="email" placeholder="voce@loja.com" autocomplete="username"></div>
+    <div class="field"><label>Senha</label><input id="loginPass" type="password" placeholder="********" autocomplete="current-password"></div>
+    <button class="btn-primary" onclick="doLogin()">Entrar</button>
+    <div class="login-hint">Recebeu um <b>convite</b>? <span style="color:var(--accent);cursor:pointer" onclick="showSignup()">Criar conta</span></div>
+  </div>
+  <div id="signupForm" class="hidden">
+    <div class="field"><label>Código do convite</label><input id="suCode" placeholder="ex: K7P2" autocapitalize="characters"></div>
+    <div class="field"><label>Seu nome</label><input id="suName" placeholder="ex: João"></div>
+    <div class="field"><label>E-mail</label><input id="suEmail" type="email" placeholder="voce@email.com" autocomplete="username"></div>
+    <div class="field"><label>Senha</label><input id="suPass" type="password" placeholder="crie uma senha" autocomplete="new-password"></div>
+    <button class="btn-primary" onclick="doSignup()">Criar conta</button>
+    <div class="login-hint">Já tem conta? <span style="color:var(--accent);cursor:pointer" onclick="showLogin()">Entrar</span></div>
+  </div>
 </div>
 <div id="app" class="hidden">
   <div class="topbar">
@@ -213,6 +223,13 @@
       <div class="add-dept"><input id="newDept" placeholder="Novo departamento"><button onclick="addDept()">Adicionar</button></div>
     </div>
     <div class="sec">
+      <h4>Equipe</h4>
+      <div class="imp-box">
+        <p>Convide um operador ou admin para esta loja. Ele cria a conta com o código e já entra amarrado à sua loja.</p>
+        <button class="btn-up" style="width:100%" onclick="openInvite()">Convidar para a loja</button>
+      </div>
+    </div>
+    <div class="sec">
       <h4>Importar cadastro do ERP</h4>
       <div class="imp-box">
         <p>Suba uma planilha com seus produtos. O operador nunca mais digita cadastro, só escaneia e lança o lote.</p>
@@ -248,19 +265,56 @@ async function doLogin(){
   // 1) autenticar de verdade no Supabase (confere a senha)
   const {data:auth,error:authErr}=await sb.auth.signInWithPassword({email,password:pass});
   if(authErr){toast('E-mail ou senha inválidos','err');return;}
-  // 2) ler o perfil: o banco diz qual o papel e a loja (não o app)
+  // 2) carrega o perfil e abre o app (reaproveitado pelo cadastro por convite)
+  await carregarPerfilEIniciar(auth.user.id,email);
+}
+async function carregarPerfilEIniciar(userId,email){
   const {data:profile,error:profErr}=await sb
     .from('profiles')
     .select('name, role, store_id, stores(name)')
-    .eq('id',auth.user.id)
+    .eq('id',userId)
     .single();
   if(profErr||!profile){toast('Perfil não encontrado para este usuário','err');return;}
-  // 3) traduzir o papel do banco (admin/operador) para o da interface (dono/repo)
+  // traduz o papel do banco (admin/operador) para o da interface (dono/repo)
   const role=profile.role==='admin'?'dono':'repo';
-  session={email,role,name:profile.name,userId:auth.user.id,storeId:profile.store_id,store:profile.stores?.name||'Minha loja'};
+  session={email,role,name:profile.name,userId,storeId:profile.store_id,store:profile.stores?.name||'Minha loja'};
   startApp();
 }
-async function doLogout(){await sb.auth.signOut();session=null;document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');stopCam();}
+// ===== Cadastro por convite =====
+function showSignup(){document.getElementById('loginForm').classList.add('hidden');document.getElementById('signupForm').classList.remove('hidden');}
+function showLogin(){document.getElementById('signupForm').classList.add('hidden');document.getElementById('loginForm').classList.remove('hidden');}
+async function doSignup(){
+  const code=document.getElementById('suCode').value.trim().toUpperCase();
+  const name=document.getElementById('suName').value.trim();
+  const email=document.getElementById('suEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('suPass').value;
+  if(!code||!name||!email||!pass){toast('Preencha todos os campos','err');return;}
+  if(pass.length<6){toast('Senha: mínimo 6 caracteres','err');return;}
+  // 1) cria o usuário (sem confirmação de e-mail, já entra autenticado)
+  const {data:su,error:suErr}=await sb.auth.signUp({email,password:pass});
+  if(suErr){toast(/already|registered/i.test(suErr.message)?'E-mail já cadastrado':'Erro ao criar conta','err');return;}
+  if(!su.user){toast('Erro ao criar conta','err');return;}
+  // 2) resgata o convite: a função do banco cria o perfil amarrado à loja do convite
+  const {error:rErr}=await sb.rpc('redeem_invite',{p_code:code,p_name:name});
+  if(rErr){toast(rErr.message||'Convite inválido','err');return;}
+  // 3) entra na loja
+  toast('Conta criada ✓');
+  await carregarPerfilEIniciar(su.user.id,email);
+}
+// ===== Geração de convite (admin) =====
+let invRole='operador';
+function openInvite(){invRole='operador';
+  sheet('<h3>Convidar para a loja</h3><div class="sub">Gere um convite e mande pra pessoa. Vale uma vez e expira em 7 dias.</div><div class="field"><label>Papel</label><div class="seg" id="invSeg" style="margin-bottom:0"><button type="button" data-r="operador" class="active" onclick="pickInvRole(this)">Operador</button><button type="button" data-r="admin" onclick="pickInvRole(this)">Admin</button></div></div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="gerarConvite()">Gerar convite</button></div>');}
+function pickInvRole(b){invRole=b.dataset.r;document.querySelectorAll('#invSeg button').forEach(x=>x.classList.toggle('active',x===b));}
+function randCode(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<5;i++)s+=a[Math.floor(Math.random()*a.length)];return s;}
+async function gerarConvite(){
+  const code=randCode();
+  const {error}=await sb.from('invites').insert({store_id:session.storeId,role:invRole,code,created_by:session.userId});
+  if(error){toast('Erro ao gerar convite','err');return;}
+  sheet('<h3>Convite criado</h3><div class="sub">Mande o código ou o link para a pessoa. Vale uma vez, expira em 7 dias.</div><div class="card-code" style="font-size:24px;text-align:center;letter-spacing:4px;margin:14px 0">'+code+'</div><button class="btn-share" onclick="shareInvite(\''+code+'\')">📤 Compartilhar convite</button><div class="sheet-actions"><button class="btn-go" onclick="closeSheet()">Pronto</button></div>');
+}
+async function shareInvite(code){const link=location.origin+location.pathname+'?convite='+code;const txt='Você foi convidado para o Stok!\nCódigo: '+code+'\nOu abra: '+link;try{if(navigator.share){await navigator.share({title:'Convite Stok',text:txt});}else{await navigator.clipboard.writeText(txt);toast('Convite copiado');}}catch(e){}}
+async function doLogout(){await sb.auth.signOut();session=null;document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');showLogin();stopCam();}
 async function startApp(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();updateAlertBadge();syncPush();go('scan');}
 function go(view){['scan','alerts','report','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('risk');if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
@@ -449,6 +503,8 @@ async function enableNotif(){
 }
 function toast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='err'?' err':'');t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2400);}
 document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+// se chegou por um link de convite, já abre a tela de criar conta com o código preenchido
+(function(){const c=new URLSearchParams(location.search).get('convite');if(c){document.getElementById('suCode').value=c.toUpperCase();showSignup();}})();
 // registra o service worker (PWA instalável + offline básico)
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
 </script>
