@@ -437,16 +437,16 @@ async function toggleCam(){if(scanning){stopCam();return;}
     codeReader=new ZXing.BrowserMultiFormatReader(hints);
     const video=document.getElementById('video');
     video.classList.remove('hidden');document.getElementById('scanPlaceholder').classList.add('hidden');document.getElementById('scanOverlay').classList.remove('hidden');document.getElementById('camBtn').textContent='Parar';
-    scanning=true;scanLocked=false;setStatus('Aponte para o código de barras...');
-    // câmera fica ligada (modo sequência); o lock evita reler enquanto a tela do lote está aberta
-    await codeReader.decodeFromConstraints({video:{facingMode:'environment'}},video,(result)=>{if(result&&scanning&&!scanLocked){scanLocked=true;feedbackScan();handleCode(result.getText());}});
+    scanning=true;setStatus('Aponte para o código de barras...');
+    // leu o código: confirma (bipe/vibra), desliga a câmera e abre a tela
+    await codeReader.decodeFromConstraints({video:{facingMode:'environment'}},video,(result)=>{if(result&&scanning){feedbackScan();stopCam();handleCode(result.getText());}});
     maybeShowTorch();
   }catch(e){setStatus('Câmera indisponível. Use o campo manual.');document.getElementById('camBtn').textContent='Câmera';scanning=false;}}
 function stopCam(){scanning=false;scanLocked=false;const t=camTrack();if(t&&torchOn){try{t.applyConstraints({advanced:[{torch:false}]});}catch(e){}}torchOn=false;document.getElementById('torchBtn')?.classList.add('hidden');document.getElementById('torchBtn')?.classList.remove('on');if(codeReader){codeReader.reset();codeReader=null;}const v=document.getElementById('video');if(v){v.classList.add('hidden');v.srcObject=null;}document.getElementById('scanOverlay')?.classList.add('hidden');document.getElementById('scanPlaceholder')?.classList.remove('hidden');const b=document.getElementById('camBtn');if(b)b.textContent='Câmera';}
 function setStatus(t){document.getElementById('scanStatus').textContent=t;}
 function handleCode(raw){const code=(raw||'').trim();if(!code){toast('Código vazio','err');return;}document.getElementById('manualCode').value='';if(db.products[code])openLotSheet(code);else openNewProductSheet(code);}
 function sheet(html){closeSheet();const bg=document.createElement('div');bg.className='sheet-bg';bg.id='sheetBg';bg.innerHTML='<div class="sheet">'+html+'</div>';bg.addEventListener('click',e=>{if(e.target===bg)closeSheet()});document.body.appendChild(bg);}
-function closeSheet(){document.getElementById('sheetBg')?.remove();if(scanning){setStatus('Aponte para o próximo código...');setTimeout(()=>{scanLocked=false;},900);}}
+function closeSheet(){document.getElementById('sheetBg')?.remove();}
 function deptOptions(sel){return db.depts.map(d=>'<option '+(d.name===sel?'selected':'')+'>'+d.name+'</option>').join('');}
 function openNewProductSheet(code){const isDono=session.role==='dono';const costField=isDono?'<div class="field"><label>Custo unitário (R$)</label><input id="np_cost" inputmode="decimal" placeholder="ex: 3,80"></div>':'<div class="field"><label>Custo unitário</label><div style="padding:13px 14px;background:var(--panel2);border:1px dashed var(--line);border-radius:10px;color:var(--dim);font-size:13px"><span class="lock">Definido pelo admin</span></div></div>';
   sheet('<h3>Produto novo</h3><div class="sub">Código não está no cadastro. Registre uma vez.</div><div class="card-code">'+code+'</div><div class="form-grid"><div class="field"><label>Nome do produto</label><input id="np_name" placeholder="ex: Leite Cond. Moça 395g"></div><div class="field"><label>Departamento</label><select id="np_dept">'+deptOptions(db.depts[0]&&db.depts[0].name)+'</select></div>'+costField+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="saveNewProduct(\''+code+'\')">Continuar</button></div>');}
