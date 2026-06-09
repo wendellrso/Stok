@@ -599,18 +599,22 @@ function parseNFe(text){
   if(xml.getElementsByTagName('parsererror').length){toast('XML inválido','err');return;}
   const dets=xml.getElementsByTagName('det');
   if(!dets.length){toast('Nenhum produto na nota','err');return;}
-  const parsed=[];let semGtin=0,nNew=0,nUpd=0;
+  const parsed=[];let semGtin=0,caixa=0,nNew=0,nUpd=0;
   for(let k=0;k<dets.length;k++){const prod=dets[k].getElementsByTagName('prod')[0];if(!prod)continue;
     const g=(t)=>{const e=prod.getElementsByTagName(t)[0];return e?e.textContent.trim():'';};
-    const ean=g('cEAN');const nome=padraoNome(g('xProd'));const vUn=g('vUnCom');
-    if(!ean||/sem\s*gtin/i.test(ean)||!/^\d{8,14}$/.test(ean)){semGtin++;continue;}
+    const nome=padraoNome(g('xProd'));const vUn=g('vUnCom');
+    // a nota traz cEAN (unidade comercial) e cEANTrib (unidade tributável); às vezes o cEAN é a CAIXA (14 díg)
+    // preferimos o código de UNIDADE (EAN-13 ou EAN-8), que é o que o operador escaneia na prateleira
+    const cands=[g('cEAN'),g('cEANTrib')];let ean='';
+    for(let j=0;j<cands.length;j++){if(/^\d{13}$/.test(cands[j])||/^\d{8}$/.test(cands[j])){ean=cands[j];break;}}
+    if(!ean){if(cands.some(c=>/^\d{14}$/.test(c)))caixa++;else semGtin++;continue;}
     if(!nome)continue;
     const cost=vUn?Math.round(parseFloat(vUn)*100)/100:null;
     if(db.products[ean])nUpd++;else nNew++;
     parsed.push({code:ean,name:nome,cost});}
   if(!parsed.length){toast('Nenhum produto com código de barras na nota','err');return;}
   window._nfeParsed=parsed;
-  sheet('<h3>Conferir nota</h3><div class="sub">Nada é gravado até você confirmar.</div><div class="imp-summary"><div class="ln new"><span>Produtos novos</span><b>'+nNew+'</b></div><div class="ln upd"><span>Atualizados (nome/custo)</span><b>'+nUpd+'</b></div>'+(semGtin?'<div class="ln nodept"><span>Sem código de barras (ignorados)</span><b>'+semGtin+'</b></div>':'')+'</div><div class="banner info"><span>i</span><div>Produtos novos entram no departamento <b>'+(db.depts[0]&&db.depts[0].name)+'</b> — ajuste depois tocando no produto ao escanear. A <b>validade</b> é lançada no scan.</div></div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="commitNFe()">Confirmar</button></div>');
+  sheet('<h3>Conferir nota</h3><div class="sub">Nada é gravado até você confirmar.</div><div class="imp-summary"><div class="ln new"><span>Produtos novos</span><b>'+nNew+'</b></div><div class="ln upd"><span>Atualizados (nome/custo)</span><b>'+nUpd+'</b></div>'+(semGtin?'<div class="ln nodept"><span>Sem código de barras (ignorados)</span><b>'+semGtin+'</b></div>':'')+(caixa?'<div class="ln nodept"><span>Código de caixa, não a unidade (ignorados)</span><b>'+caixa+'</b></div>':'')+'</div>'+(caixa?'<div class="banner warn"><span>!</span><div><b>'+caixa+' item(ns)</b> vieram só com o código da caixa (não bate com a prateleira). Eles serão cadastrados quando o operador escanear a unidade.</div></div>':'')+'<div class="banner info"><span>i</span><div>Produtos novos entram no departamento <b>'+(db.depts[0]&&db.depts[0].name)+'</b> — ajuste depois tocando no produto ao escanear. A <b>validade</b> é lançada no scan.</div></div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="commitNFe()">Confirmar</button></div>');
 }
 async function commitNFe(){const parsed=window._nfeParsed||[];const dPad=db.depts[0];
   for(const r of parsed){const ex=db.products[r.code];
