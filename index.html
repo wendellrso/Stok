@@ -592,27 +592,33 @@ async function commitImport(){const parsed=window._impParsed||[];
   closeSheet();renderSettings();toast(parsed.length+' produtos sincronizados');}
 // padroniza nome no mesmo estilo do catálogo: inicial maiúscula por palavra, unidades minúsculas (200ml, 90g)
 function padraoNome(s){return (s||'').trim().toLowerCase().split(/\s+/).map(w=>w?w[0].toUpperCase()+w.slice(1):w).join(' ');}
+// remove "lixo" de embalagem do texto da nota (ex: "(caixa 96 unid.)", "fardo", "display")
+function limpaXProd(s){return (s||'').replace(/\([^)]*\b(caixa|cx|fardo|display|unid|und|pacote|pct|emb|sortid)[^)]*\)/gi,'').replace(/\s{2,}/g,' ').trim();}
 function onXmlPicked(ev){const file=ev.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{parseNFe(reader.result);}catch(e){toast('Erro ao ler o XML','err');}ev.target.value='';};reader.readAsText(file,'utf-8');}
-function parseNFe(text){
+async function parseNFe(text){
   if(!db.depts.length){toast('Crie ao menos um departamento antes de importar','err');return;}
   const xml=new DOMParser().parseFromString(text,'application/xml');
   if(xml.getElementsByTagName('parsererror').length){toast('XML inválido','err');return;}
   const dets=xml.getElementsByTagName('det');
   if(!dets.length){toast('Nenhum produto na nota','err');return;}
-  const parsed=[];let semGtin=0,caixa=0,nNew=0,nUpd=0;
+  const itens=[];let semGtin=0,caixa=0;
   for(let k=0;k<dets.length;k++){const prod=dets[k].getElementsByTagName('prod')[0];if(!prod)continue;
     const g=(t)=>{const e=prod.getElementsByTagName(t)[0];return e?e.textContent.trim():'';};
-    const nome=padraoNome(g('xProd'));const vUn=g('vUnCom');
+    const xprod=g('xProd');const vUn=g('vUnCom');
     // a nota traz cEAN (unidade comercial) e cEANTrib (unidade tributável); às vezes o cEAN é a CAIXA (14 díg)
     // preferimos o código de UNIDADE (EAN-13 ou EAN-8), que é o que o operador escaneia na prateleira
     const cands=[g('cEAN'),g('cEANTrib')];let ean='';
     for(let j=0;j<cands.length;j++){if(/^\d{13}$/.test(cands[j])||/^\d{8}$/.test(cands[j])){ean=cands[j];break;}}
     if(!ean){if(cands.some(c=>/^\d{14}$/.test(c)))caixa++;else semGtin++;continue;}
-    if(!nome)continue;
+    if(!xprod)continue;
     const cost=vUn?Math.round(parseFloat(vUn)*100)/100:null;
-    if(db.products[ean])nUpd++;else nNew++;
-    parsed.push({code:ean,name:nome,cost});}
-  if(!parsed.length){toast('Nenhum produto com código de barras na nota','err');return;}
+    itens.push({code:ean,xprod,cost});}
+  if(!itens.length){toast('Nenhum produto com código de barras na nota','err');return;}
+  // nome do CATÁLOGO quando o código já existe (seu padrão); senão, limpa o texto da nota e padroniza
+  const eans=[...new Set(itens.map(i=>i.code))];const cat={};
+  try{const {data}=await sb.from('global_products').select('barcode, name').in('barcode',eans);(data||[]).forEach(d=>cat[d.barcode]=d.name);}catch(e){}
+  let nNew=0,nUpd=0;const parsed=[];
+  for(const it of itens){const name=cat[it.code]||padraoNome(limpaXProd(it.xprod));if(db.products[it.code])nUpd++;else nNew++;parsed.push({code:it.code,name,cost:it.cost});}
   window._nfeParsed=parsed;
   sheet('<h3>Conferir nota</h3><div class="sub">Nada é gravado até você confirmar.</div><div class="imp-summary"><div class="ln new"><span>Produtos novos</span><b>'+nNew+'</b></div><div class="ln upd"><span>Atualizados (nome/custo)</span><b>'+nUpd+'</b></div>'+(semGtin?'<div class="ln nodept"><span>Sem código de barras (ignorados)</span><b>'+semGtin+'</b></div>':'')+(caixa?'<div class="ln nodept"><span>Código de caixa, não a unidade (ignorados)</span><b>'+caixa+'</b></div>':'')+'</div>'+(caixa?'<div class="banner warn"><span>!</span><div><b>'+caixa+' item(ns)</b> vieram só com o código da caixa (não bate com a prateleira). Eles serão cadastrados quando o operador escanear a unidade.</div></div>':'')+'<div class="banner info"><span>i</span><div>Produtos novos entram no departamento <b>'+(db.depts[0]&&db.depts[0].name)+'</b> — ajuste depois tocando no produto ao escanear. A <b>validade</b> é lançada no scan.</div></div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="commitNFe()">Confirmar</button></div>');
 }
