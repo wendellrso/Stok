@@ -145,6 +145,11 @@
   .scan-stats .ss-l{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-top:4px}
   .recent-h{font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:20px 0 10px}
   #alertSeg button{font-size:12px; padding:9px 3px} #alertSeg .n{font-size:16px}
+  .pass-wrap{position:relative}
+  .pass-wrap input{width:100%; padding-right:46px}
+  .pass-wrap .eye{position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; font-size:18px; padding:6px; line-height:1; cursor:pointer}
+  .keep{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); margin:4px 0 6px}
+  .keep input{width:auto}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
@@ -153,20 +158,22 @@
 <div id="login">
   <div class="brand">Sto<span>k</span></div>
   <div class="brand-sub">Controle de validade para o varejo</div>
-  <div id="loginForm">
+  <form id="loginForm" onsubmit="event.preventDefault();doLogin();">
     <div class="field"><label>E-mail</label><input id="loginEmail" type="email" placeholder="voce@loja.com" autocomplete="username"></div>
-    <div class="field"><label>Senha</label><input id="loginPass" type="password" placeholder="********" autocomplete="current-password"></div>
-    <button class="btn-primary" onclick="doLogin()">Entrar</button>
+    <div class="field"><label>Senha</label><div class="pass-wrap"><input id="loginPass" type="password" placeholder="********" autocomplete="current-password"><button type="button" class="eye" onclick="togglePass('loginPass',this)">👁</button></div></div>
+    <label class="keep"><input type="checkbox" id="keepLogged" checked> Manter conectado</label>
+    <button class="btn-primary" type="submit">Entrar</button>
     <div class="login-hint">Esqueceu a senha? <span style="color:var(--accent);cursor:pointer" onclick="forgotPassword()">Recuperar</span><br>Recebeu um <b>convite</b>? <span style="color:var(--accent);cursor:pointer" onclick="showSignup()">Criar conta</span></div>
-  </div>
-  <div id="signupForm" class="hidden">
+  </form>
+  <form id="signupForm" class="hidden" onsubmit="event.preventDefault();doSignup();">
     <div class="field"><label>Código do convite</label><input id="suCode" placeholder="ex: K7P2" autocapitalize="characters"></div>
-    <div class="field"><label>Seu nome</label><input id="suName" placeholder="ex: João"></div>
+    <div class="field"><label>Seu nome</label><input id="suName" placeholder="ex: João" autocomplete="name"></div>
     <div class="field"><label>E-mail</label><input id="suEmail" type="email" placeholder="voce@email.com" autocomplete="username"></div>
-    <div class="field"><label>Senha</label><input id="suPass" type="password" placeholder="crie uma senha" autocomplete="new-password"></div>
-    <button class="btn-primary" onclick="doSignup()">Criar conta</button>
+    <div class="field"><label>Senha</label><div class="pass-wrap"><input id="suPass" type="password" placeholder="crie uma senha" autocomplete="new-password"><button type="button" class="eye" onclick="togglePass('suPass',this)">👁</button></div></div>
+    <div class="field"><label>Confirmar senha</label><div class="pass-wrap"><input id="suPass2" type="password" placeholder="repita a senha" autocomplete="new-password"><button type="button" class="eye" onclick="togglePass('suPass2',this)">👁</button></div></div>
+    <button class="btn-primary" type="submit">Criar conta</button>
     <div class="login-hint">Já tem conta? <span style="color:var(--accent);cursor:pointer" onclick="showLogin()">Entrar</span></div>
-  </div>
+  </form>
 </div>
 <div id="app" class="hidden">
   <div class="topbar">
@@ -286,6 +293,7 @@ async function doLogin(){
   const email=document.getElementById('loginEmail').value.trim().toLowerCase();
   const pass=document.getElementById('loginPass').value;
   if(!email||!pass){toast('Preencha e-mail e senha','err');return;}
+  try{localStorage.setItem('stok_keep',document.getElementById('keepLogged').checked?'1':'0');}catch(e){}
   // 1) autenticar de verdade no Supabase (confere a senha)
   const {data:auth,error:authErr}=await sb.auth.signInWithPassword({email,password:pass});
   if(authErr){toast('E-mail ou senha inválidos','err');return;}
@@ -307,6 +315,7 @@ async function carregarPerfilEIniciar(userId,email){
 // ===== Cadastro por convite =====
 function showSignup(){document.getElementById('loginForm').classList.add('hidden');document.getElementById('signupForm').classList.remove('hidden');}
 function showLogin(){document.getElementById('signupForm').classList.add('hidden');document.getElementById('loginForm').classList.remove('hidden');}
+function togglePass(id,btn){const i=document.getElementById(id);if(i.type==='password'){i.type='text';btn.textContent='🙈';}else{i.type='password';btn.textContent='👁';}}
 async function forgotPassword(){
   const email=document.getElementById('loginEmail').value.trim().toLowerCase();
   if(!email){toast('Digite seu e-mail no campo acima primeiro','err');return;}
@@ -329,8 +338,11 @@ async function doSignup(){
   const name=document.getElementById('suName').value.trim();
   const email=document.getElementById('suEmail').value.trim().toLowerCase();
   const pass=document.getElementById('suPass').value;
+  const pass2=document.getElementById('suPass2').value;
   if(!code||!name||!email||!pass){toast('Preencha todos os campos','err');return;}
   if(pass.length<6){toast('Senha: mínimo 6 caracteres','err');return;}
+  if(pass!==pass2){toast('As senhas não conferem','err');return;}
+  try{localStorage.setItem('stok_keep','1');}catch(e){}
   // 1) cria o usuário (sem confirmação de e-mail, já entra autenticado)
   const {data:su,error:suErr}=await sb.auth.signUp({email,password:pass});
   if(suErr){toast(/already|registered/i.test(suErr.message)?'E-mail já cadastrado':'Erro ao criar conta','err');return;}
@@ -657,7 +669,13 @@ async function enableNotif(){
   }catch(e){toast('Não foi possível ativar os avisos','err');}
 }
 function toast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='err'?' err':'');t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2400);}
-document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+// auto-restaura a sessão: mantém conectado entre recarregamentos/atualizações do app
+(async ()=>{
+  if(location.hash.includes('type=recovery'))return; // recuperação de senha trata sozinho
+  if(new URLSearchParams(location.search).get('convite'))return; // veio por link de convite
+  if(localStorage.getItem('stok_keep')==='0'){try{await sb.auth.signOut();}catch(e){}return;}
+  try{const {data}=await sb.auth.getSession();if(data&&data.session&&data.session.user){await carregarPerfilEIniciar(data.session.user.id,data.session.user.email);}}catch(e){}
+})();
 // se chegou por um link de convite, já abre a tela de criar conta com o código preenchido
 (function(){const c=new URLSearchParams(location.search).get('convite');if(c){document.getElementById('suCode').value=c.toUpperCase();showSignup();}})();
 // registra o service worker (PWA instalável + offline básico)
