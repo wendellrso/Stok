@@ -248,6 +248,14 @@
         <input type="file" id="csvFile" accept=".csv,text/csv" class="hidden" onchange="onCsvPicked(event)">
       </div>
     </div>
+    <div class="sec">
+      <h4>Importar nota fiscal (XML)</h4>
+      <div class="imp-box">
+        <p>Suba o XML da nota do fornecedor. Cadastramos os produtos e os custos de uma vez. A <b>validade</b> você lança ao escanear — ela não vem na nota.</p>
+        <button class="btn-up" style="width:100%" onclick="document.getElementById('xmlFile').click()">Importar XML da nota</button>
+        <input type="file" id="xmlFile" accept=".xml,text/xml,application/xml" class="hidden" onchange="onXmlPicked(event)">
+      </div>
+    </div>
   </div>
   <div class="nav" id="nav">
     <button data-view="scan" class="active" onclick="go('scan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10"/></svg>Lançar</button>
@@ -582,6 +590,32 @@ async function commitImport(){const parsed=window._impParsed||[];
     if(ex){const patch={name:r.name};if(r.dept)patch.department_id=deptId;const {error}=await sb.from('products').update(patch).eq('id',ex.id);if(error){toast('Erro ao atualizar '+r.code,'err');return;}ex.name=r.name;if(r.dept)ex.dept=deptName;sb.from('global_products').upsert({barcode:r.code,name:r.name,updated_at:new Date().toISOString()});if(r.cost!=null){await sb.from('product_costs').upsert({product_id:ex.id,store_id:session.storeId,cost:r.cost});ex.cost=r.cost;}}
     else{const {data,error}=await sb.from('products').insert({store_id:session.storeId,barcode:r.code,name:r.name,department_id:deptId}).select('id').single();if(error){toast('Erro ao inserir '+r.code,'err');return;}if(r.cost!=null)await sb.from('product_costs').upsert({product_id:data.id,store_id:session.storeId,cost:r.cost});sb.from('global_products').upsert({barcode:r.code,name:r.name,updated_at:new Date().toISOString()});db.products[r.code]={id:data.id,name:r.name,dept:deptName,cost:r.cost};}}
   closeSheet();renderSettings();toast(parsed.length+' produtos sincronizados');}
+function onXmlPicked(ev){const file=ev.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{parseNFe(reader.result);}catch(e){toast('Erro ao ler o XML','err');}ev.target.value='';};reader.readAsText(file,'utf-8');}
+function parseNFe(text){
+  if(!db.depts.length){toast('Crie ao menos um departamento antes de importar','err');return;}
+  const xml=new DOMParser().parseFromString(text,'application/xml');
+  if(xml.getElementsByTagName('parsererror').length){toast('XML inválido','err');return;}
+  const dets=xml.getElementsByTagName('det');
+  if(!dets.length){toast('Nenhum produto na nota','err');return;}
+  const parsed=[];let semGtin=0,nNew=0,nUpd=0;
+  for(let k=0;k<dets.length;k++){const prod=dets[k].getElementsByTagName('prod')[0];if(!prod)continue;
+    const g=(t)=>{const e=prod.getElementsByTagName(t)[0];return e?e.textContent.trim():'';};
+    const ean=g('cEAN');const nome=g('xProd');const vUn=g('vUnCom');
+    if(!ean||/sem\s*gtin/i.test(ean)||!/^\d{8,14}$/.test(ean)){semGtin++;continue;}
+    if(!nome)continue;
+    const cost=vUn?Math.round(parseFloat(vUn)*100)/100:null;
+    if(db.products[ean])nUpd++;else nNew++;
+    parsed.push({code:ean,name:nome,cost});}
+  if(!parsed.length){toast('Nenhum produto com código de barras na nota','err');return;}
+  window._nfeParsed=parsed;
+  sheet('<h3>Conferir nota</h3><div class="sub">Nada é gravado até você confirmar.</div><div class="imp-summary"><div class="ln new"><span>Produtos novos</span><b>'+nNew+'</b></div><div class="ln upd"><span>Atualizados (nome/custo)</span><b>'+nUpd+'</b></div>'+(semGtin?'<div class="ln nodept"><span>Sem código de barras (ignorados)</span><b>'+semGtin+'</b></div>':'')+'</div><div class="banner info"><span>i</span><div>Produtos novos entram no departamento <b>'+(db.depts[0]&&db.depts[0].name)+'</b> — ajuste depois tocando no produto ao escanear. A <b>validade</b> é lançada no scan.</div></div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="commitNFe()">Confirmar</button></div>');
+}
+async function commitNFe(){const parsed=window._nfeParsed||[];const dPad=db.depts[0];
+  for(const r of parsed){const ex=db.products[r.code];
+    if(ex){await sb.from('products').update({name:r.name}).eq('id',ex.id);ex.name=r.name;if(r.cost!=null){await sb.from('product_costs').upsert({product_id:ex.id,store_id:session.storeId,cost:r.cost});ex.cost=r.cost;}}
+    else{const {data,error}=await sb.from('products').insert({store_id:session.storeId,barcode:r.code,name:r.name,department_id:dPad?dPad.id:null}).select('id').single();if(error){toast('Erro em '+r.code,'err');return;}if(r.cost!=null)await sb.from('product_costs').upsert({product_id:data.id,store_id:session.storeId,cost:r.cost});db.products[r.code]={id:data.id,name:r.name,dept:dPad&&dPad.name,cost:r.cost};}
+    sb.from('global_products').upsert({barcode:r.code,name:r.name,updated_at:new Date().toISOString()});}
+  closeSheet();renderScan();toast(parsed.length+' produtos importados da nota');}
 // ===== Notificações push (Fase 1: inscrição) =====
 function pushSuportado(){return ('Notification' in window)&&('serviceWorker' in navigator)&&('PushManager' in window);}
 function refreshNotifBanner(){const nb=document.getElementById('notifBanner');if(!nb)return;if(!pushSuportado()||Notification.permission==='granted'){nb.innerHTML='';return;}nb.innerHTML='<div class="banner info" style="cursor:pointer" onclick="enableNotif()"><span>🔔</span><div>Ativar avisos diários de vencimento neste aparelho</div></div>';}
