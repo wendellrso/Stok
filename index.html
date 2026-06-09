@@ -147,7 +147,8 @@
   #alertSeg button{font-size:12px; padding:9px 3px} #alertSeg .n{font-size:16px}
   .pass-wrap{position:relative}
   .pass-wrap input{width:100%; padding-right:46px}
-  .pass-wrap .eye{position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; font-size:18px; padding:6px; line-height:1; cursor:pointer}
+  .pass-wrap .eye{position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; padding:6px; line-height:0; cursor:pointer; color:var(--dim)}
+  .pass-wrap .eye svg{width:20px; height:20px; display:block}
   .keep{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); margin:4px 0 6px}
   .keep input{width:auto}
 </style>
@@ -160,7 +161,7 @@
   <div class="brand-sub">Controle de validade para o varejo</div>
   <form id="loginForm" onsubmit="event.preventDefault();doLogin();">
     <div class="field"><label>E-mail</label><input id="loginEmail" type="email" placeholder="voce@loja.com" autocomplete="username"></div>
-    <div class="field"><label>Senha</label><div class="pass-wrap"><input id="loginPass" type="password" placeholder="********" autocomplete="current-password"><button type="button" class="eye" onclick="togglePass('loginPass',this)">👁</button></div></div>
+    <div class="field"><label>Senha</label><div class="pass-wrap"><input id="loginPass" type="password" placeholder="********" autocomplete="current-password"><button type="button" class="eye" onclick="togglePass('loginPass',this)"></button></div></div>
     <label class="keep"><input type="checkbox" id="keepLogged" checked> Manter conectado</label>
     <button class="btn-primary" type="submit">Entrar</button>
     <div class="login-hint">Esqueceu a senha? <span style="color:var(--accent);cursor:pointer" onclick="forgotPassword()">Recuperar</span><br>Recebeu um <b>convite</b>? <span style="color:var(--accent);cursor:pointer" onclick="showSignup()">Criar conta</span></div>
@@ -169,8 +170,8 @@
     <div class="field"><label>Código do convite</label><input id="suCode" placeholder="ex: K7P2" autocapitalize="characters"></div>
     <div class="field"><label>Seu nome</label><input id="suName" placeholder="ex: João" autocomplete="name"></div>
     <div class="field"><label>E-mail</label><input id="suEmail" type="email" placeholder="voce@email.com" autocomplete="username"></div>
-    <div class="field"><label>Senha</label><div class="pass-wrap"><input id="suPass" type="password" placeholder="crie uma senha" autocomplete="new-password"><button type="button" class="eye" onclick="togglePass('suPass',this)">👁</button></div></div>
-    <div class="field"><label>Confirmar senha</label><div class="pass-wrap"><input id="suPass2" type="password" placeholder="repita a senha" autocomplete="new-password"><button type="button" class="eye" onclick="togglePass('suPass2',this)">👁</button></div></div>
+    <div class="field"><label>Senha</label><div class="pass-wrap"><input id="suPass" type="password" placeholder="crie uma senha" autocomplete="new-password"><button type="button" class="eye" onclick="togglePass('suPass',this)"></button></div></div>
+    <div class="field"><label>Confirmar senha</label><div class="pass-wrap"><input id="suPass2" type="password" placeholder="repita a senha" autocomplete="new-password"><button type="button" class="eye" onclick="togglePass('suPass2',this)"></button></div></div>
     <button class="btn-primary" type="submit">Criar conta</button>
     <div class="login-hint">Já tem conta? <span style="color:var(--accent);cursor:pointer" onclick="showLogin()">Entrar</span></div>
   </form>
@@ -315,7 +316,10 @@ async function carregarPerfilEIniciar(userId,email){
 // ===== Cadastro por convite =====
 function showSignup(){document.getElementById('loginForm').classList.add('hidden');document.getElementById('signupForm').classList.remove('hidden');}
 function showLogin(){document.getElementById('signupForm').classList.add('hidden');document.getElementById('loginForm').classList.remove('hidden');}
-function togglePass(id,btn){const i=document.getElementById(id);if(i.type==='password'){i.type='text';btn.textContent='🙈';}else{i.type='password';btn.textContent='👁';}}
+const EYE_ON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function togglePass(id,btn){const i=document.getElementById(id);if(i.type==='password'){i.type='text';btn.innerHTML=EYE_OFF;}else{i.type='password';btn.innerHTML=EYE_ON;}}
+document.querySelectorAll('.eye').forEach(b=>b.innerHTML=EYE_ON);
 async function forgotPassword(){
   const email=document.getElementById('loginEmail').value.trim().toLowerCase();
   if(!email){toast('Digite seu e-mail no campo acima primeiro','err');return;}
