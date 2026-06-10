@@ -234,6 +234,7 @@
       <button class="btn-share" onclick="shareReport()">📤 Compartilhar relatório</button>
     </div>
     <div id="rep-loss" class="hidden"><div id="lossContent"></div></div>
+    <button class="btn-share" onclick="exportarEstoque()" style="margin-top:14px">📄 Relatório de estoque (imprimir/PDF)</button>
   </div>
   <div class="view hidden" id="v-settings">
     <div class="view-title">Configurações</div>
@@ -246,13 +247,6 @@
       </div>
     </div>
     <div class="cfg-card">
-      <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Buscar produto</div><div class="cfg-d">Encontrar e corrigir um produto cadastrado</div></div><span class="cfg-chev">▸</span></div>
-      <div class="cfg-body">
-        <input id="prodSearch" placeholder="Nome ou código de barras" oninput="renderProdSearch()" style="width:100%;padding:11px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);outline:none;margin-bottom:10px">
-        <div id="prodSearchResults"></div>
-      </div>
-    </div>
-    <div class="cfg-card">
       <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Equipe</div><div class="cfg-d">Convide e defina as áreas de cada pessoa</div></div><span class="cfg-chev">▸</span></div>
       <div class="cfg-body">
         <button class="btn-up" style="width:100%" onclick="openInvite()">Convidar para a loja</button>
@@ -260,13 +254,13 @@
         <div id="teamAreas" style="margin-top:16px"></div>
       </div>
     </div>
-    <div class="cfg-card">
-      <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Exportar dados</div><div class="cfg-d">Relatório do estoque (imprimir ou salvar PDF)</div></div><span class="cfg-chev">▸</span></div>
-      <div class="cfg-body">
-        <button class="btn-up" style="width:100%" onclick="exportarEstoque()">Gerar relatório de estoque</button>
-      </div>
-    </div>
-    <div class="cfg-card">
+  </div>
+  <div class="view hidden" id="v-products">
+    <div class="view-title">Produtos</div>
+    <div class="view-sub">Buscar, corrigir e importar seu cadastro</div>
+    <input id="prodSearch" placeholder="Buscar por nome ou código de barras" oninput="renderProdSearch()" style="width:100%;padding:12px 13px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);outline:none;margin-bottom:12px">
+    <div id="prodSearchResults"></div>
+    <div class="cfg-card" style="margin-top:18px">
       <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Importar produtos</div><div class="cfg-d">Por planilha (CSV) ou nota fiscal (XML)</div></div><span class="cfg-chev">▸</span></div>
       <div class="cfg-body">
         <div class="cfg-sub">Planilha (CSV)</div>
@@ -285,6 +279,7 @@
     <button data-view="scan" class="active" onclick="go('scan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10"/></svg>Lançar</button>
     <button data-view="alerts" onclick="go('alerts')"><span class="nav-badge hidden" id="alertBadge">0</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 00-7 7c0 5-3 7-3 7h20s-3-2-3-7a7 7 0 00-7-7zM10 21a2 2 0 004 0"/></svg>Alertas</button>
     <button data-view="report" id="navReport" onclick="go('report')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 16l4-6 3 3 5-7"/></svg>Relatório</button>
+    <button data-view="products" id="navProducts" onclick="go('products')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12l8.73-5.04M12 22V12"/></svg>Produtos</button>
     <button data-view="settings" id="navSettings" onclick="go('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 00-1.7-1L14.5 2h-5l-.3 2.5a7 7 0 00-1.7 1l-2.4-1-2 3.5L2.6 11a7 7 0 000 2l-2 1.5 2 3.5 2.4-1a7 7 0 001.7 1L9.5 22h5l.3-2.5a7 7 0 001.7-1l2.4 1 2-3.5-2-1.5a7 7 0 00.1-1z"/></svg>Config</button>
   </div>
 </div>
@@ -405,8 +400,8 @@ function subStatus(){
   return {state:'ok'};
 }
 function showBlocked(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.add('hidden');document.getElementById('blocked').classList.remove('hidden');const isDono=session.role==='dono';document.getElementById('blkTitle').textContent=isDono?'Assinatura vencida':'Acesso indisponível';document.getElementById('blkMsg').innerHTML=isDono?('A loja <b>'+(session.store||'')+'</b> está com a assinatura vencida. Regularize para voltar a usar o Stok.<br><br><b>Seus dados estão guardados</b> — nada foi perdido.'):'O acesso a esta loja está temporariamente indisponível.';document.getElementById('blkSub').textContent=isDono?'Fale com o suporte para regularizar o pagamento.':'Fale com o responsável pela loja.';stopCam();}
-async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(session.role==='dono'&&st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();updateAlertBadge();syncPush();go('scan');}
-function go(view){['scan','alerts','report','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('risk');if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
+async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(session.role==='dono'&&st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navProducts').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();updateAlertBadge();syncPush();go('scan');}
+function go(view){['scan','alerts','report','products','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('risk');if(view==='products')renderProdSearch();if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
   const {data,error}=await sb.from('departments').select('id, name, alert_days').order('name');
   if(error){toast('Erro ao carregar departamentos','err');return;}
