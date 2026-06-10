@@ -245,6 +245,13 @@
       </div>
     </div>
     <div class="cfg-card">
+      <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Buscar produto</div><div class="cfg-d">Encontrar e corrigir um produto cadastrado</div></div><span class="cfg-chev">▸</span></div>
+      <div class="cfg-body">
+        <input id="prodSearch" placeholder="Nome ou código de barras" oninput="renderProdSearch()" style="width:100%;padding:11px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);outline:none;margin-bottom:10px">
+        <div id="prodSearchResults"></div>
+      </div>
+    </div>
+    <div class="cfg-card">
       <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Equipe</div><div class="cfg-d">Convide e defina as áreas de cada pessoa</div></div><span class="cfg-chev">▸</span></div>
       <div class="cfg-body">
         <button class="btn-up" style="width:100%" onclick="openInvite()">Convidar para a loja</button>
@@ -570,8 +577,10 @@ async function renderLoss(){const el=document.getElementById('lossContent');el.i
   const now=new Date();const meses=[];const mm={};
   for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const o={key:d.toISOString().slice(0,7),label:d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''),val:0};meses.push(o);mm[o.key]=o;}
   (bx||[]).forEach(b=>{const p=byId[b.product_id];if(p&&p.cost!=null){const k=(b.created_at||'').slice(0,7);if(mm[k])mm[k].val+=p.cost*b.qty;}});
-  const maxm=Math.max(1,...meses.map(m=>m.val));
-  html+='<div class="sec"><h4>Evolução da perda (6 meses)</h4><div style="display:flex;align-items:flex-end;gap:6px;height:130px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 10px 8px">'+meses.map(m=>'<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end"><div style="font-size:9px;color:var(--muted)">'+(m.val?fmt(m.val).replace('R$ ',''):'')+'</div><div style="width:72%;background:var(--red);border-radius:4px 4px 0 0;height:'+Math.max(4,Math.round(m.val/maxm*80))+'px"></div><div style="font-size:10px;color:var(--muted);text-transform:capitalize">'+m.label+'</div></div>').join('')+'</div></div>';
+  // mostra a partir do 1º mês com dado (loja nova começa só no mês atual e cresce dali)
+  let ini=meses.length-1;for(let i=0;i<meses.length;i++){if(meses[i].val>0){ini=i;break;}}
+  const vis=meses.slice(ini);const maxm=Math.max(1,...vis.map(m=>m.val));
+  html+='<div class="sec"><h4>Evolução da perda</h4><div style="display:flex;align-items:flex-end;gap:6px;height:130px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 10px 8px">'+vis.map(m=>'<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end"><div style="font-size:9px;color:var(--muted)">'+(m.val?fmt(m.val).replace('R$ ',''):'')+'</div><div style="width:72%;background:var(--red);border-radius:4px 4px 0 0;height:'+Math.max(4,Math.round(m.val/maxm*80))+'px"></div><div style="font-size:10px;color:var(--muted);text-transform:capitalize">'+m.label+'</div></div>').join('')+'</div></div>';
   el.innerHTML=html;
 }
 function openMovDetail(reason){
@@ -587,6 +596,7 @@ function openMovDetail(reason){
 function openCostFix(codes){const f=codes.map(c=>'<div class="field"><label>'+db.products[c].name+'</label><input data-code="'+c+'" inputmode="decimal" placeholder="custo R$"></div>').join('');sheet('<h3>Cadastrar custos</h3><div class="sub">Confidencial, só o admin vê.</div><div class="form-grid">'+f+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Depois</button><button class="btn-go" onclick="saveCosts()">Salvar</button></div>');}
 async function saveCosts(){const inputs=[...document.querySelectorAll('#sheetBg input[data-code]')];for(const i of inputs){const v=i.value.replace(',','.');if(!v)continue;const cost=parseFloat(v);const code=i.dataset.code;const {error}=await sb.from('product_costs').upsert({product_id:db.products[code].id,store_id:session.storeId,cost});if(error){toast('Erro ao salvar custo','err');return;}db.products[code].cost=cost;}closeSheet();renderReport();toast('Custos atualizados');}
 function toggleCfg(h){h.parentElement.classList.toggle('open');}
+function renderProdSearch(){const q=(document.getElementById('prodSearch').value||'').trim().toLowerCase();const el=document.getElementById('prodSearchResults');if(!el)return;if(!q){el.innerHTML='';return;}const res=Object.entries(db.products).filter(([code,p])=>p.name.toLowerCase().includes(q)||code.includes(q)).slice(0,15);if(!res.length){el.innerHTML='<div style="color:var(--dim);font-size:13px;padding:6px 0">Nenhum produto encontrado</div>';return;}el.innerHTML=res.map(([code,p])=>'<div class="item" style="cursor:pointer" onclick="openProductEdit(\''+code+'\')"><div class="item-main"><div class="item-name">'+p.name+'</div><div class="item-meta"><span class="tag" style="font-family:monospace">'+code+'</span><span class="tag">'+p.dept+'</span></div></div></div>').join('');}
 function renderSettings(){document.getElementById('deptList').innerHTML=db.depts.map((d,i)=>'<div class="dept-row"><span class="dname">'+d.name+'</span><input class="days" type="number" value="'+d.alertDays+'" onchange="setDeptDays('+i+',this.value)"><span class="dunit">dias</span><button class="del" onclick="delDept('+i+')">x</button></div>').join('');renderTeamAreas();renderInvites();}
 async function renderInvites(){
   const el=document.getElementById('pendingInvites');if(!el)return;
