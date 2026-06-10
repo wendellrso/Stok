@@ -256,10 +256,8 @@
       <div class="cfg-body">
         <div class="cfg-sub">Planilha (CSV)</div>
         <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Seu cadastro do ERP. O operador nunca mais digita produto.</p>
-        <div class="imp-btns">
-          <button class="btn-model" onclick="downloadModel()">Baixar modelo</button>
-          <button class="btn-up" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
-        </div>
+        <button class="btn-up" style="width:100%" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
+        <button class="btn-model" style="width:100%;margin-top:8px" onclick="downloadModel()">Baixar modelo</button>
         <input type="file" id="csvFile" accept=".csv,text/csv" class="hidden" onchange="onCsvPicked(event)">
         <div class="cfg-sub" style="margin-top:18px">Nota fiscal (XML)</div>
         <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Produtos e custos da nota do fornecedor de uma vez. A validade você lança ao escanear.</p>
