@@ -457,7 +457,7 @@ async function loadMyAreas(){
 function lotVisivel(l){if(session.role==='dono'||!db.myAreas)return true;const p=db.products[l.code];return !!(p&&db.myAreas.has(p.dept));}
 function deptAlert(dept){const d=db.depts.find(x=>x.name===dept);return d?d.alertDays:30;}
 function daysUntil(s){const t=new Date();t.setHours(0,0,0,0);return Math.round((new Date(s+'T00:00:00')-t)/86400000);}
-function severity(code,days){const p=db.products[code];const limit=p?deptAlert(p.dept):30;if(days<=Math.max(2,Math.round(limit*0.25)))return'crit';if(days<=limit)return'warn';return'ok';}
+function severity(code,days){const p=db.products[code];const limit=p?deptAlert(p.dept):30;const crit=Math.min(7,limit);if(days<=crit)return'crit';if(days<=limit)return'warn';return'ok';}
 // selo vermelho no ícone de Alertas: nº de lotes críticos. Faz o app "gritar" o que precisa de ação.
 function updateAlertBadge(){const n=db.lots.filter(l=>db.products[l.code]&&lotVisivel(l)&&severity(l.code,daysUntil(l.exp))==='crit').length;const b=document.getElementById('alertBadge');if(!b)return;b.textContent=n>99?'99+':n;b.classList.toggle('hidden',n===0);}
 // enriquece a aba Lançar: resumo (lotes ativos / críticos) + últimos lançamentos
