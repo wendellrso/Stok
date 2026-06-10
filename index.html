@@ -552,9 +552,18 @@ async function renderLoss(){const el=document.getElementById('lossContent');el.i
   let perda=0;const perdaDept={};let uV=0,uP=0,uL=0;
   data.forEach(b=>{const p=byId[b.product_id];if(b.reason==='vendido')uV+=b.qty;else if(b.reason==='promovido')uP+=b.qty;else if(b.reason==='perdido'){uL+=b.qty;if(p&&p.cost!=null){const v=p.cost*b.qty;perda+=v;perdaDept[p.dept]=(perdaDept[p.dept]||0)+v;}}});
   const depts=Object.entries(perdaDept).sort((a,b)=>b[1]-a[1]);const maxv=depts.length?depts[0][1]:1;
-  el.innerHTML='<div class="risk-total"><div class="lbl">Perdido nos últimos 30 dias</div><div class="val">'+fmt(perda)+'</div><div class="sub">'+uL+' unidades descartadas</div></div>'+
+  let html='<div class="risk-total"><div class="lbl">Perdido nos últimos 30 dias</div><div class="val">'+fmt(perda)+'</div><div class="sub">'+uL+' unidades descartadas</div></div>'+
     '<div class="sec"><h4>Movimentação (toque para ver os produtos)</h4><div class="imp-summary"><div class="ln new" style="cursor:pointer" onclick="openMovDetail(\'vendido\')"><span>Vendido (preço normal) ›</span><b>'+uV+' un</b></div><div class="ln upd" style="cursor:pointer" onclick="openMovDetail(\'promovido\')"><span>Oferta (com desconto) ›</span><b>'+uP+' un</b></div><div class="ln" style="cursor:pointer" onclick="openMovDetail(\'perdido\')"><span style="color:var(--red)">Perdido (foi pro lixo) ›</span><b>'+uL+' un</b></div></div></div>'+
     (depts.length?'<div class="sec"><h4>Perda por departamento</h4>'+depts.map(([d,v])=>'<div class="dept-bar"><div class="head"><span class="dn">'+d+'</span><span class="dv">'+fmt(v)+'</span></div><div class="meter"><div class="fill" style="width:'+Math.max(6,v/maxv*100)+'%"></div></div><div class="dcount">'+(perda?(v/perda*100).toFixed(0):0)+'% da perda total</div></div>').join('')+'</div>':'<div class="empty"><div class="ico">👏</div>Nenhuma perda registrada no período</div>');
+  // evolução da perda nos últimos 6 meses (mostra se o Stok está ajudando)
+  const s6=new Date();s6.setMonth(s6.getMonth()-5);s6.setDate(1);s6.setHours(0,0,0,0);
+  const {data:bx}=await sb.from('baixas').select('qty, product_id, created_at').eq('reason','perdido').gte('created_at',s6.toISOString());
+  const now=new Date();const meses=[];const mm={};
+  for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const o={key:d.toISOString().slice(0,7),label:d.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''),val:0};meses.push(o);mm[o.key]=o;}
+  (bx||[]).forEach(b=>{const p=byId[b.product_id];if(p&&p.cost!=null){const k=(b.created_at||'').slice(0,7);if(mm[k])mm[k].val+=p.cost*b.qty;}});
+  const maxm=Math.max(1,...meses.map(m=>m.val));
+  html+='<div class="sec"><h4>Evolução da perda (6 meses)</h4><div style="display:flex;align-items:flex-end;gap:6px;height:130px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 10px 8px">'+meses.map(m=>'<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;justify-content:flex-end"><div style="font-size:9px;color:var(--muted)">'+(m.val?fmt(m.val).replace('R$ ',''):'')+'</div><div style="width:72%;background:var(--red);border-radius:4px 4px 0 0;height:'+Math.max(4,Math.round(m.val/maxm*80))+'px"></div><div style="font-size:10px;color:var(--muted);text-transform:capitalize">'+m.label+'</div></div>').join('')+'</div></div>';
+  el.innerHTML=html;
 }
 function openMovDetail(reason){
   const labels={vendido:'Vendido (preço normal)',promovido:'Oferta (com desconto)',perdido:'Perdido (foi pro lixo)'};
