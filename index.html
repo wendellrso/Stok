@@ -151,6 +151,15 @@
   .pass-wrap .eye svg{width:20px; height:20px; display:block}
   .keep{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); margin:4px 0 6px}
   .keep input{width:auto}
+  .cfg-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; margin-bottom:12px; overflow:hidden}
+  .cfg-head{display:flex; align-items:center; justify-content:space-between; padding:16px; cursor:pointer; gap:12px}
+  .cfg-t{font-weight:700; font-size:15px}
+  .cfg-d{font-size:12px; color:var(--muted); margin-top:2px}
+  .cfg-chev{color:var(--muted); font-size:15px; transition:transform .2s; flex-shrink:0}
+  .cfg-card.open .cfg-chev{transform:rotate(90deg)}
+  .cfg-body{padding:0 16px 16px; display:none}
+  .cfg-card.open .cfg-body{display:block}
+  .cfg-sub{font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--accent); font-weight:700; margin-bottom:4px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
@@ -227,39 +236,33 @@
   <div class="view hidden" id="v-settings">
     <div class="view-title">Configurações</div>
     <div class="view-sub">Ajuste uma vez. Depois é só usar.</div>
-    <div class="sec">
-      <h4>Departamentos e alerta padrão</h4>
-      <div id="deptList"></div>
-      <div class="add-dept"><input id="newDept" placeholder="Novo departamento"><button onclick="addDept()">Adicionar</button></div>
-    </div>
-    <div class="sec">
-      <h4>Equipe</h4>
-      <div class="imp-box">
-        <p>Convide um operador ou admin para esta loja. Ele cria a conta com o código e já entra amarrado à sua loja.</p>
-        <button class="btn-up" style="width:100%" onclick="openInvite()">Convidar para a loja</button>
+    <div class="cfg-card open">
+      <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Departamentos</div><div class="cfg-d">Categorias e dias de alerta de cada uma</div></div><span class="cfg-chev">▸</span></div>
+      <div class="cfg-body">
+        <div id="deptList"></div>
+        <div class="add-dept"><input id="newDept" placeholder="Novo departamento"><button onclick="addDept()">Adicionar</button></div>
       </div>
-      <div id="pendingInvites"></div>
     </div>
-    <div class="sec">
-      <h4>Áreas dos operadores</h4>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Toque nos departamentos que cada operador cuida. Ele verá só as áreas marcadas. Sem nenhuma marcada, vê a loja toda.</p>
-      <div id="teamAreas"></div>
+    <div class="cfg-card">
+      <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Equipe</div><div class="cfg-d">Convide e defina as áreas de cada pessoa</div></div><span class="cfg-chev">▸</span></div>
+      <div class="cfg-body">
+        <button class="btn-up" style="width:100%" onclick="openInvite()">Convidar para a loja</button>
+        <div id="pendingInvites"></div>
+        <div id="teamAreas" style="margin-top:16px"></div>
+      </div>
     </div>
-    <div class="sec">
-      <h4>Importar cadastro do ERP</h4>
-      <div class="imp-box">
-        <p>Suba uma planilha com seus produtos. O operador nunca mais digita cadastro, só escaneia e lança o lote.</p>
+    <div class="cfg-card">
+      <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Importar produtos</div><div class="cfg-d">Por planilha (CSV) ou nota fiscal (XML)</div></div><span class="cfg-chev">▸</span></div>
+      <div class="cfg-body">
+        <div class="cfg-sub">Planilha (CSV)</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Seu cadastro do ERP. O operador nunca mais digita produto.</p>
         <div class="imp-btns">
           <button class="btn-model" onclick="downloadModel()">Baixar modelo</button>
           <button class="btn-up" onclick="document.getElementById('csvFile').click()">Importar CSV</button>
         </div>
         <input type="file" id="csvFile" accept=".csv,text/csv" class="hidden" onchange="onCsvPicked(event)">
-      </div>
-    </div>
-    <div class="sec">
-      <h4>Importar nota fiscal (XML)</h4>
-      <div class="imp-box">
-        <p>Suba o XML da nota do fornecedor. Cadastramos os produtos e os custos de uma vez. A <b>validade</b> você lança ao escanear — ela não vem na nota.</p>
+        <div class="cfg-sub" style="margin-top:18px">Nota fiscal (XML)</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Produtos e custos da nota do fornecedor de uma vez. A validade você lança ao escanear.</p>
         <button class="btn-up" style="width:100%" onclick="document.getElementById('xmlFile').click()">Importar XML da nota</button>
         <input type="file" id="xmlFile" accept=".xml,text/xml,application/xml" class="hidden" onchange="onXmlPicked(event)">
       </div>
@@ -567,6 +570,7 @@ function openMovDetail(reason){
 }
 function openCostFix(codes){const f=codes.map(c=>'<div class="field"><label>'+db.products[c].name+'</label><input data-code="'+c+'" inputmode="decimal" placeholder="custo R$"></div>').join('');sheet('<h3>Cadastrar custos</h3><div class="sub">Confidencial, só o admin vê.</div><div class="form-grid">'+f+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Depois</button><button class="btn-go" onclick="saveCosts()">Salvar</button></div>');}
 async function saveCosts(){const inputs=[...document.querySelectorAll('#sheetBg input[data-code]')];for(const i of inputs){const v=i.value.replace(',','.');if(!v)continue;const cost=parseFloat(v);const code=i.dataset.code;const {error}=await sb.from('product_costs').upsert({product_id:db.products[code].id,store_id:session.storeId,cost});if(error){toast('Erro ao salvar custo','err');return;}db.products[code].cost=cost;}closeSheet();renderReport();toast('Custos atualizados');}
+function toggleCfg(h){h.parentElement.classList.toggle('open');}
 function renderSettings(){document.getElementById('deptList').innerHTML=db.depts.map((d,i)=>'<div class="dept-row"><span class="dname">'+d.name+'</span><input class="days" type="number" value="'+d.alertDays+'" onchange="setDeptDays('+i+',this.value)"><span class="dunit">dias</span><button class="del" onclick="delDept('+i+')">x</button></div>').join('');renderTeamAreas();renderInvites();}
 async function renderInvites(){
   const el=document.getElementById('pendingInvites');if(!el)return;
