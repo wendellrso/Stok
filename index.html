@@ -51,8 +51,10 @@
   .view-sub{color:var(--muted); font-size:13px; margin-bottom:20px}
   .scan-cta{width:100%; padding:16px; background:var(--red); color:#fff; font-weight:700; border-radius:12px; font-size:16px; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:9px; transition:transform .08s}
   .scan-cta:active{transform:scale(.99)}
-  #scanFull{position:fixed; inset:0; z-index:80; background:#000}
-  #scanFull video{width:100%; height:100%; object-fit:cover}
+  #scanFull{position:fixed; inset:0; width:100vw; height:100dvh; z-index:80; background:#000}
+  #scanFull video{width:100%; height:100%; object-fit:cover; display:block}
+  #scanFull .scan-frame{left:8%; right:8%; top:40%; bottom:40%; border-radius:10px}
+  #scanFull .scan-laser{left:8%; right:8%}
   .scan-top{position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; padding:16px; z-index:2}
   .scan-x{width:42px; height:42px; border-radius:50%; background:rgba(0,0,0,.55); color:#fff; font-size:20px; display:flex; align-items:center; justify-content:center}
   .scan-torch{width:42px; height:42px; border-radius:50%; background:rgba(0,0,0,.55); font-size:20px}
@@ -499,7 +501,7 @@ function renderScan(){
   if(!recent.length){el.innerHTML='';return;}
   el.innerHTML='<div class="recent-h">Últimos lançamentos</div>'+recent.map(l=>{const p=db.products[l.code];const days=daysUntil(l.exp);const sev=severity(l.code,days);const dl=days<0?'venc.':days===0?'hoje':days+(days===1?' dia':' dias');return '<div class="item '+sev+'" style="cursor:pointer" onclick="openLotEdit(\''+l.id+'\')"><div class="item-main"><div class="item-name">'+p.name+'</div><div class="item-meta"><span class="tag" style="font-family:monospace">'+l.code+'</span><span class="tag lote">Lote '+l.lot+'</span><span>Qtd '+l.qty+'</span></div></div><div class="item-days"><div class="d">'+(days<0?'!':days)+'</div><div class="lbl">'+dl+'</div></div></div>';}).join('');
 }
-let codeReader=null,scanning=false,scanLocked=false,torchOn=false,audioCtx=null;
+let codeReader=null,scanning=false,scanLocked=false,torchOn=false,audioCtx=null,_scanCand=null;
 // bipe curto + vibração: confirma a leitura sem o operador olhar a tela (sensação de leitor de verdade)
 function feedbackScan(){
   try{if(navigator.vibrate)navigator.vibrate(70);}catch(e){}
@@ -511,14 +513,14 @@ async function toggleTorch(){const t=camTrack();if(!t)return;torchOn=!torchOn;tr
 async function toggleCam(){if(scanning){stopCam();return;}
   if(!window.ZXing){toast('Leitor não carregou. Recarregue a página.','err');return;}
   try{
-    // restringe a leitura aos padrões do varejo brasileiro: EAN-13 e EAN-8
-    const hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8]);
+    // restringe a leitura a EAN-13/EAN-8 (varejo BR) e liga o modo mais preciso
+    const hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8]);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
     codeReader=new ZXing.BrowserMultiFormatReader(hints);
     document.getElementById('scanFull').classList.remove('hidden');
     const video=document.getElementById('video');
-    scanning=true;setStatus('Aponte para o código de barras...');
-    // leu o código: confirma (bipe/vibra), fecha a câmera e abre a tela
-    await codeReader.decodeFromConstraints({video:{facingMode:'environment'}},video,(result)=>{if(result&&scanning){feedbackScan();stopCam();handleCode(result.getText());}});
+    scanning=true;_scanCand=null;setStatus('Aponte para o código de barras...');
+    // só aceita depois de ler o MESMO código 2x seguidas (evita leitura errada espúria)
+    await codeReader.decodeFromConstraints({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},video,(result)=>{if(result&&scanning){const code=result.getText();if(code===_scanCand){feedbackScan();stopCam();handleCode(code);}else{_scanCand=code;}}});
     maybeShowTorch();
   }catch(e){toast('Câmera indisponível. Use o campo manual.','err');document.getElementById('scanFull').classList.add('hidden');scanning=false;}}
 function stopCam(){scanning=false;scanLocked=false;const t=camTrack();if(t&&torchOn){try{t.applyConstraints({advanced:[{torch:false}]});}catch(e){}}torchOn=false;document.getElementById('torchBtn')?.classList.add('hidden');document.getElementById('torchBtn')?.classList.remove('on');if(codeReader){codeReader.reset();codeReader=null;}const v=document.getElementById('video');if(v){v.srcObject=null;}document.getElementById('scanFull')?.classList.add('hidden');}
