@@ -684,9 +684,9 @@ function exportarSaidas(){
   corpo+=sec('Vendido (preço normal)','vendido')+sec('Oferta (com desconto)','promovido');
   abrirRelatorio('Saídas (30 dias)',corpo,'Relatório de Saídas '+dataArquivo());
 }
-let _prodFilter='all';
+let _prodFilter='all',_prodExpanded=false;
 function renderProdutos(){
-  _prodFilter='all';const s=document.getElementById('prodSearch');if(s)s.value='';
+  _prodFilter='all';_prodExpanded=false;const s=document.getElementById('prodSearch');if(s)s.value='';
   const total=Object.keys(db.products).length;
   const semCusto=session.role==='dono'?Object.values(db.products).filter(p=>p.cost==null).length:0;
   const el=document.getElementById('prodStats');if(!el){renderProdSearch();return;}
@@ -696,17 +696,19 @@ function renderProdutos(){
   renderProdSearch();
 }
 function toggleProdFilter(){_prodFilter=_prodFilter==='semcusto'?'all':'semcusto';renderProdSearch();}
+function _prodItem(code,p){return '<div class="item" style="cursor:pointer" onclick="openProductEdit(\''+code+'\')"><div class="item-main"><div class="item-name">'+p.name+'</div><div class="item-meta"><span class="tag" style="font-family:monospace">'+code+'</span><span class="tag">'+p.dept+'</span>'+(p.cost==null&&session.role==='dono'?'<span class="tag" style="color:var(--amber)">sem custo</span>':'')+'</div></div></div>';}
+function toggleProdExpand(){_prodExpanded=!_prodExpanded;renderProdSearch();}
 function renderProdSearch(){
   const q=((document.getElementById('prodSearch')||{}).value||'').trim().toLowerCase();
   const el=document.getElementById('prodSearchResults');if(!el)return;
-  let list=Object.entries(db.products);
-  if(_prodFilter==='semcusto')list=list.filter(([c,p])=>p.cost==null);
-  if(q)list=list.filter(([code,p])=>p.name.toLowerCase().includes(q)||code.includes(q));
-  list.sort((a,b)=>a[1].name.localeCompare(b[1].name));
-  const cap=list.slice(0,50);
-  if(!cap.length){el.innerHTML='<div style="color:var(--dim);font-size:13px;padding:8px 0">'+((q||_prodFilter==='semcusto')?'Nenhum produto encontrado':'Nenhum produto cadastrado ainda')+'</div>';return;}
-  const head=_prodFilter==='semcusto'?'<div class="recent-h">Sem custo — toque pra corrigir ('+list.length+')</div>':(q?'':'<div class="recent-h">Todos os produtos ('+list.length+')</div>');
-  el.innerHTML=head+cap.map(([code,p])=>'<div class="item" style="cursor:pointer" onclick="openProductEdit(\''+code+'\')"><div class="item-main"><div class="item-name">'+p.name+'</div><div class="item-meta"><span class="tag" style="font-family:monospace">'+code+'</span><span class="tag">'+p.dept+'</span>'+(p.cost==null&&session.role==='dono'?'<span class="tag" style="color:var(--amber)">sem custo</span>':'')+'</div></div></div>').join('')+(list.length>50?'<div style="text-align:center;color:var(--dim);font-size:12px;padding:8px">+ '+(list.length-50)+' — use a busca</div>':'');
+  const fmtCap=(list,header)=>{const cap=list.slice(0,50);return header+cap.map(([c,p])=>_prodItem(c,p)).join('')+(list.length>50?'<div style="text-align:center;color:var(--dim);font-size:12px;padding:8px">+ '+(list.length-50)+' — use a busca</div>':'');};
+  if(q){const list=Object.entries(db.products).filter(([code,p])=>p.name.toLowerCase().includes(q)||code.includes(q)).sort((a,b)=>a[1].name.localeCompare(b[1].name));el.innerHTML=list.length?fmtCap(list,''):'<div style="color:var(--dim);font-size:13px;padding:8px 0">Nenhum produto encontrado</div>';return;}
+  if(_prodFilter==='semcusto'){const list=Object.entries(db.products).filter(([c,p])=>p.cost==null).sort((a,b)=>a[1].name.localeCompare(b[1].name));el.innerHTML=list.length?fmtCap(list,'<div class="recent-h">Sem custo — toque pra corrigir ('+list.length+')</div>'):'<div style="color:var(--dim);font-size:13px;padding:8px 0">Todos com custo 👍</div>';return;}
+  const all=Object.entries(db.products).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  if(!all.length){el.innerHTML='<div style="color:var(--dim);font-size:13px;padding:8px 0">Nenhum produto cadastrado ainda</div>';return;}
+  let html='<div class="recent-h" style="cursor:pointer" onclick="toggleProdExpand()">Todos os produtos ('+all.length+') '+(_prodExpanded?'▾':'▸')+'</div>';
+  if(_prodExpanded)html+=fmtCap(all,'');
+  el.innerHTML=html;
 }
 function renderSettings(){document.getElementById('deptList').innerHTML=db.depts.map((d,i)=>'<div class="dept-row"><input class="dname" value="'+d.name.replace(/"/g,'&quot;')+'" onchange="setDeptName('+i+',this.value)"><input class="days" type="number" value="'+d.alertDays+'" onchange="setDeptDays('+i+',this.value)"><span class="dunit">dias</span><button class="del" onclick="delDept('+i+')">x</button></div>').join('');renderTeamAreas();renderInvites();renderConta();}
 async function setDeptName(i,v){const nome=(v||'').trim();const old=db.depts[i].name;if(!nome||nome===old){renderSettings();return;}if(db.depts.some((d,j)=>j!==i&&d.name.toLowerCase()===nome.toLowerCase())){toast('Já existe um departamento com esse nome','err');renderSettings();return;}const {error}=await sb.from('departments').update({name:nome}).eq('id',db.depts[i].id);if(error){toast('Erro ao renomear','err');renderSettings();return;}Object.values(db.products).forEach(p=>{if(p.dept===old)p.dept=nome;});db.depts[i].name=nome;toast('Departamento renomeado');renderSettings();}
