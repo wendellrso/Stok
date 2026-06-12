@@ -158,6 +158,12 @@
   .scan-stats .ss-l{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-top:4px}
   .recent-h{font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:20px 0 10px}
   #alertSeg button{font-size:12px; padding:9px 3px} #alertSeg .n{font-size:16px}
+  #reportSeg button{font-size:13px; padding:9px 4px}
+  .panel-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px}
+  .panel-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; cursor:pointer}
+  .panel-card .pv{font-size:24px; font-weight:800; line-height:1.1}
+  .panel-card .pl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-top:6px}
+  .panel-card .ps{font-size:11px; color:var(--dim); margin-top:3px}
   .pass-wrap{position:relative}
   .pass-wrap input{width:100%; padding-right:46px}
   .pass-wrap .eye{position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; padding:6px; line-height:0; cursor:pointer; color:var(--dim)}
@@ -233,11 +239,13 @@
     <div class="view-title">Relatório</div>
     <div class="view-sub">Críticos, perdas e saídas</div>
     <div class="seg" id="reportSeg">
-      <button data-rep="risk" class="active" onclick="repTab('risk')">Crítico</button>
+      <button data-rep="painel" class="active" onclick="repTab('painel')">Painel</button>
+      <button data-rep="risk" onclick="repTab('risk')">Crítico</button>
       <button data-rep="loss" onclick="repTab('loss')">Perdas</button>
       <button data-rep="mov" onclick="repTab('mov')">Saídas</button>
     </div>
-    <div id="rep-risk">
+    <div id="rep-painel"><div id="painelContent"></div></div>
+    <div id="rep-risk" class="hidden">
       <div id="pendingBanner"></div>
       <div class="risk-total"><div class="lbl">Em risco — próximos 7 dias</div><div class="val" id="riskVal">R$ 0,00</div><div class="sub" id="riskSub">0 lotes</div></div>
       <div id="deptBars"></div>
@@ -431,7 +439,7 @@ function subStatus(){
 }
 function showBlocked(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.add('hidden');document.getElementById('blocked').classList.remove('hidden');const isDono=session.role==='dono';document.getElementById('blkTitle').textContent=isDono?'Assinatura vencida':'Acesso indisponível';document.getElementById('blkMsg').innerHTML=isDono?('A loja <b>'+(session.store||'')+'</b> está com a assinatura vencida. Regularize para voltar a usar o Stok.<br><br><b>Seus dados estão guardados</b> — nada foi perdido.'):'O acesso a esta loja está temporariamente indisponível.';document.getElementById('blkSub').textContent=isDono?'Fale com o suporte para regularizar o pagamento.':'Fale com o responsável pela loja.';stopCam();}
 async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(session.role==='dono'&&st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navProducts').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);document.getElementById('appLoading').classList.remove('hidden');await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();document.getElementById('appLoading').classList.add('hidden');updateAlertBadge();syncPush();go('scan');}
-function go(view){['scan','alerts','report','products','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('risk');if(view==='products')renderProdutos();if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
+function go(view){['scan','alerts','report','products','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('painel');if(view==='products')renderProdutos();if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
   const {data,error}=await sb.from('departments').select('id, name, alert_days').order('name');
   if(error){toast('Erro ao carregar departamentos','err');return;}
@@ -606,7 +614,24 @@ async function shareReport(){
   txt+='\n\nGerado pelo Stok';
   try{if(navigator.share){await navigator.share({title:'Stok — Dinheiro em risco',text:txt});}else{await navigator.clipboard.writeText(txt);toast('Relatório copiado');}}catch(e){}
 }
-function repTab(t){['risk','loss','mov'].forEach(x=>document.getElementById('rep-'+x).classList.toggle('hidden',x!==t));document.querySelectorAll('#reportSeg button').forEach(b=>b.classList.toggle('active',b.dataset.rep===t));if(t==='risk')renderCritico();else if(t==='loss')renderPerdas();else renderMov();}
+function repTab(t){['painel','risk','loss','mov'].forEach(x=>document.getElementById('rep-'+x).classList.toggle('hidden',x!==t));document.querySelectorAll('#reportSeg button').forEach(b=>b.classList.toggle('active',b.dataset.rep===t));if(t==='painel')renderPainel();else if(t==='risk')renderCritico();else if(t==='loss')renderPerdas();else renderMov();}
+async function renderPainel(){
+  const el=document.getElementById('painelContent');if(!el)return;el.innerHTML='<div class="empty">Carregando...</div>';
+  let critR=0,critN=0,vencN=0;
+  db.lots.forEach(l=>{const p=db.products[l.code];if(!p)return;const d=daysUntil(l.exp);if(d<0)vencN++;else if(severity(l.code,d)==='crit'){critN++;if(p.cost!=null)critR+=p.cost*l.qty;}});
+  const ini=new Date();ini.setDate(1);ini.setHours(0,0,0,0);
+  const {data}=await sb.from('baixas').select('qty, reason, product_id').gte('created_at',ini.toISOString());
+  const byId={};Object.values(db.products).forEach(p=>byId[p.id]=p);
+  let perdaMes=0,saidasMes=0;
+  (data||[]).forEach(b=>{const p=byId[b.product_id];if(b.reason==='perdido'){if(p&&p.cost!=null)perdaMes+=p.cost*b.qty;}else saidasMes+=b.qty;});
+  const card=(val,lab,sub,cor,onclick)=>'<div class="panel-card" onclick="'+onclick+'"><div class="pv" style="color:'+cor+'">'+val+'</div><div class="pl">'+lab+'</div>'+(sub?'<div class="ps">'+sub+'</div>':'')+'</div>';
+  el.innerHTML='<div class="panel-grid">'+
+    card(fmt(critR),'Em risco — 7 dias',critN+' lote(s) crítico(s)','var(--amber)',"repTab('risk')")+
+    card(vencN,'Vencidos na loja','para recolher','var(--red)',"goAlertas('expired')")+
+    card(fmt(perdaMes),'Perdas no mês','jogado fora','var(--red)',"repTab('loss')")+
+    card(saidasMes,'Saídas no mês','vendido + oferta (un)','var(--green)',"repTab('mov')")+
+  '</div>';
+}
 let _perdasPDF=null,_movPDF=null;
 async function renderPerdas(){const el=document.getElementById('lossContent');el.innerHTML='<div class="empty">Carregando...</div>';
   const since=new Date(Date.now()-30*86400000).toISOString();
