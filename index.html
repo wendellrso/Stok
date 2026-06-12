@@ -63,7 +63,7 @@
   .scan-overlay{position:absolute; inset:0; pointer-events:none}
   .scan-frame{position:absolute; left:14%; right:14%; top:30%; bottom:30%; border:2px solid var(--red); border-radius:8px; box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
   .scan-laser{position:absolute; left:14%; right:14%; height:2px; background:var(--red); box-shadow:0 0 8px var(--red); animation:laser 2s ease-in-out infinite}
-  @keyframes laser{0%,100%{top:34%}50%{top:66%}}
+  @keyframes laser{0%,100%{top:42%}50%{top:58%}}
   .scan-placeholder{color:var(--dim); text-align:center; padding:16px; font-size:13px}
   .scan-status{text-align:center; font-size:13px; color:var(--muted); min-height:18px; margin-bottom:12px}
   .input-row{display:flex; gap:10px; margin-bottom:12px}
@@ -513,14 +513,14 @@ async function toggleTorch(){const t=camTrack();if(!t)return;torchOn=!torchOn;tr
 async function toggleCam(){if(scanning){stopCam();return;}
   if(!window.ZXing){toast('Leitor não carregou. Recarregue a página.','err');return;}
   try{
-    // restringe a leitura a EAN-13/EAN-8 (varejo BR) e liga o modo mais preciso
-    const hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8]);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+    // restringe a leitura aos padrões do varejo brasileiro: EAN-13 e EAN-8
+    const hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8]);
     codeReader=new ZXing.BrowserMultiFormatReader(hints);
     document.getElementById('scanFull').classList.remove('hidden');
     const video=document.getElementById('video');
-    scanning=true;_scanCand=null;setStatus('Aponte para o código de barras...');
-    // só aceita depois de ler o MESMO código 2x seguidas (evita leitura errada espúria)
-    await codeReader.decodeFromConstraints({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},video,(result)=>{if(result&&scanning){const code=result.getText();if(code===_scanCand){feedbackScan();stopCam();handleCode(code);}else{_scanCand=code;}}});
+    scanning=true;setStatus('Aponte para o código de barras...');
+    // leu o código: confirma (bipe/vibra), fecha a câmera e abre a tela
+    await codeReader.decodeFromConstraints({video:{facingMode:'environment'}},video,(result)=>{if(result&&scanning){feedbackScan();stopCam();handleCode(result.getText());}});
     maybeShowTorch();
   }catch(e){toast('Câmera indisponível. Use o campo manual.','err');document.getElementById('scanFull').classList.add('hidden');scanning=false;}}
 function stopCam(){scanning=false;scanLocked=false;const t=camTrack();if(t&&torchOn){try{t.applyConstraints({advanced:[{torch:false}]});}catch(e){}}torchOn=false;document.getElementById('torchBtn')?.classList.add('hidden');document.getElementById('torchBtn')?.classList.remove('on');if(codeReader){codeReader.reset();codeReader=null;}const v=document.getElementById('video');if(v){v.srcObject=null;}document.getElementById('scanFull')?.classList.add('hidden');}
