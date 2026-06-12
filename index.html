@@ -46,7 +46,11 @@
   .pill.dono{background:var(--red-soft); color:#ff7088}
   .pill.repo{background:#11243a; color:var(--accent)}
   .logout{font-size:13px; color:var(--muted)}
-  .view{padding:18px}
+  .view{padding:18px; animation:fadeIn .22s ease}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(5px)} to{opacity:1; transform:none}}
+  #appLoading{position:fixed; inset:0; z-index:90; background:var(--bg); display:flex; align-items:center; justify-content:center}
+  .spin{width:38px; height:38px; border:3px solid var(--line); border-top-color:var(--red); border-radius:50%; animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
   .view-title{font-size:22px; font-weight:800; letter-spacing:-.5px; margin-bottom:2px}
   .view-sub{color:var(--muted); font-size:13px; margin-bottom:20px}
   .scan-cta{width:100%; padding:16px; background:var(--red); color:#fff; font-weight:700; border-radius:12px; font-size:16px; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:9px; transition:transform .08s}
@@ -203,7 +207,7 @@
   </div>
   <div id="subBanner" style="padding:0 18px"></div>
   <div class="view" id="v-scan">
-    <div class="view-title">Lançar lote</div>
+    <div class="view-title" id="scanGreet">Lançar lote</div>
     <div class="view-sub">Escaneie o produto para registrar um lote</div>
     <div id="onboard"></div>
     <div id="scanStats"></div>
@@ -308,6 +312,7 @@
   <p style="color:var(--dim);font-size:13px" id="blkSub"></p>
   <button class="logout" style="margin-top:22px" onclick="doLogout()">Sair</button>
 </div>
+<div id="appLoading" class="hidden"><div class="spin"></div></div>
 <div id="scanFull" class="hidden">
   <video id="video" playsinline></video>
   <div class="scan-overlay" id="scanOverlay"><div class="scan-frame"></div><div class="scan-laser"></div></div>
@@ -329,11 +334,13 @@ async function doLogin(){
   const pass=document.getElementById('loginPass').value;
   if(!email||!pass){toast('Preencha e-mail e senha','err');return;}
   try{localStorage.setItem('stok_keep',document.getElementById('keepLogged').checked?'1':'0');}catch(e){}
+  const btn=document.querySelector('#loginForm button[type="submit"]');if(btn){btn.disabled=true;btn.textContent='Entrando...';}
   // 1) autenticar de verdade no Supabase (confere a senha)
   const {data:auth,error:authErr}=await sb.auth.signInWithPassword({email,password:pass});
-  if(authErr){toast('E-mail ou senha inválidos','err');return;}
+  if(authErr){toast('E-mail ou senha inválidos','err');if(btn){btn.disabled=false;btn.textContent='Entrar';}return;}
   // 2) carrega o perfil e abre o app (reaproveitado pelo cadastro por convite)
   await carregarPerfilEIniciar(auth.user.id,email);
+  if(btn){btn.disabled=false;btn.textContent='Entrar';}
 }
 async function carregarPerfilEIniciar(userId,email){
   const {data:profile,error:profErr}=await sb
@@ -423,7 +430,7 @@ function subStatus(){
   return {state:'ok'};
 }
 function showBlocked(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.add('hidden');document.getElementById('blocked').classList.remove('hidden');const isDono=session.role==='dono';document.getElementById('blkTitle').textContent=isDono?'Assinatura vencida':'Acesso indisponível';document.getElementById('blkMsg').innerHTML=isDono?('A loja <b>'+(session.store||'')+'</b> está com a assinatura vencida. Regularize para voltar a usar o Stok.<br><br><b>Seus dados estão guardados</b> — nada foi perdido.'):'O acesso a esta loja está temporariamente indisponível.';document.getElementById('blkSub').textContent=isDono?'Fale com o suporte para regularizar o pagamento.':'Fale com o responsável pela loja.';stopCam();}
-async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(session.role==='dono'&&st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navProducts').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();updateAlertBadge();syncPush();go('scan');}
+async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(session.role==='dono'&&st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';document.getElementById('tbStore').textContent=session.store;const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navProducts').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);document.getElementById('appLoading').classList.remove('hidden');await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();document.getElementById('appLoading').classList.add('hidden');updateAlertBadge();syncPush();go('scan');}
 function go(view){['scan','alerts','report','products','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('risk');if(view==='products')renderProdutos();if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
   const {data,error}=await sb.from('departments').select('id, name, alert_days').order('name');
@@ -474,6 +481,7 @@ function severity(code,days){const p=db.products[code];const limit=p?deptAlert(p
 function updateAlertBadge(){const n=db.lots.filter(l=>db.products[l.code]&&lotVisivel(l)&&severity(l.code,daysUntil(l.exp))==='crit').length;const b=document.getElementById('alertBadge');if(!b)return;b.textContent=n>99?'99+':n;b.classList.toggle('hidden',n===0);}
 // enriquece a aba Lançar: resumo (lotes ativos / críticos) + últimos lançamentos
 function renderScan(){
+  const gh=document.getElementById('scanGreet');if(gh){const h=new Date().getHours();const saud=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';const nome=(session.name||'').split(' ')[0];gh.textContent=saud+(nome?', '+nome:'')+' 👋';}
   const ob=document.getElementById('onboard');
   if(ob){
     if(session.role==='dono'){
