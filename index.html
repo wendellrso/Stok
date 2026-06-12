@@ -249,10 +249,10 @@
       <div id="pendingBanner"></div>
       <div class="risk-total"><div class="lbl">Em risco — próximos 7 dias</div><div class="val" id="riskVal">R$ 0,00</div><div class="sub" id="riskSub">0 lotes</div></div>
       <div id="deptBars"></div>
-      <button class="btn-share" onclick="exportarCritico()" style="margin-top:14px">📤 Compartilhar relatório (PDF)</button>
+      <button class="btn-share" onclick="exportarCritico()" style="margin-top:14px">Compartilhar relatório (PDF)</button>
     </div>
-    <div id="rep-loss" class="hidden"><div id="lossContent"></div><button class="btn-share" onclick="exportarPerdas()" style="margin-top:14px">📤 Compartilhar relatório (PDF)</button></div>
-    <div id="rep-mov" class="hidden"><div id="movContent"></div><button class="btn-share" onclick="exportarSaidas()" style="margin-top:14px">📤 Compartilhar relatório (PDF)</button></div>
+    <div id="rep-loss" class="hidden"><div id="lossContent"></div><button class="btn-share" onclick="exportarPerdas()" style="margin-top:14px">Compartilhar relatório (PDF)</button></div>
+    <div id="rep-mov" class="hidden"><div id="movContent"></div><button class="btn-share" onclick="exportarSaidas()" style="margin-top:14px">Compartilhar relatório (PDF)</button></div>
   </div>
   <div class="view hidden" id="v-settings">
     <div class="view-title">Configurações</div>
@@ -382,7 +382,7 @@ async function saveNewPassword(){
   if(!pass||pass.length<6){toast('Senha: mínimo 6 caracteres','err');return;}
   const {error}=await sb.auth.updateUser({password:pass});
   if(error){toast('Erro ao atualizar senha','err');return;}
-  closeSheet();await sb.auth.signOut();toast('Senha atualizada ✓ Entre novamente');
+  closeSheet();await sb.auth.signOut();toast('Senha atualizada. Entre novamente');
 }
 // quando o usuário volta pelo link de recuperação do e-mail, abre a tela de nova senha
 sb.auth.onAuthStateChange((event)=>{if(event==='PASSWORD_RECOVERY')showResetPassword();});
@@ -404,7 +404,7 @@ async function doSignup(){
   const {error:rErr}=await sb.rpc('redeem_invite',{p_code:code,p_name:name});
   if(rErr){toast(rErr.message||'Convite inválido','err');return;}
   // 3) entra na loja
-  toast('Conta criada ✓');
+  toast('Conta criada');
   await carregarPerfilEIniciar(su.user.id,email);
 }
 // ===== Geração de convite (admin) =====
@@ -422,7 +422,7 @@ async function gerarConvite(){
   if(invRole==='operador'&&invDepts.size)payload.department_ids=[...invDepts];
   const {error}=await sb.from('invites').insert(payload);
   if(error){toast('Erro ao gerar convite','err');return;}
-  sheet('<h3>Convite criado</h3><div class="sub">Mande o código ou o link para a pessoa. Vale uma vez, expira em 7 dias.</div><div class="card-code" style="font-size:24px;text-align:center;letter-spacing:4px;margin:14px 0">'+code+'</div><button class="btn-share" onclick="shareInvite(\''+code+'\')">📤 Compartilhar convite</button><div class="sheet-actions"><button class="btn-go" onclick="closeSheet()">Pronto</button></div>');
+  sheet('<h3>Convite criado</h3><div class="sub">Mande o código ou o link para a pessoa. Vale uma vez, expira em 7 dias.</div><div class="card-code" style="font-size:24px;text-align:center;letter-spacing:4px;margin:14px 0">'+code+'</div><button class="btn-share" onclick="shareInvite(\''+code+'\')">Compartilhar convite</button><div class="sheet-actions"><button class="btn-go" onclick="closeSheet()">Pronto</button></div>');
 }
 async function shareInvite(code){const link=location.origin+location.pathname+'?convite='+code;const txt='Você foi convidado para o Stok!\nCódigo: '+code+'\nOu abra: '+link;try{if(navigator.share){await navigator.share({title:'Convite Stok',text:txt});}else{await navigator.clipboard.writeText(txt);toast('Convite copiado');}}catch(e){}}
 async function doLogout(){await sb.auth.signOut();session=null;document.getElementById('app').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('login').classList.remove('hidden');showLogin();stopCam();}
@@ -489,14 +489,14 @@ function severity(code,days){const p=db.products[code];const limit=p?deptAlert(p
 function updateAlertBadge(){const n=db.lots.filter(l=>db.products[l.code]&&lotVisivel(l)&&severity(l.code,daysUntil(l.exp))==='crit').length;const b=document.getElementById('alertBadge');if(!b)return;b.textContent=n>99?'99+':n;b.classList.toggle('hidden',n===0);}
 // enriquece a aba Lançar: resumo (lotes ativos / críticos) + últimos lançamentos
 function renderScan(){
-  const gh=document.getElementById('scanGreet');if(gh){const h=new Date().getHours();const saud=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';const nome=(session.name||'').split(' ')[0];gh.textContent=saud+(nome?', '+nome:'')+' 👋';}
+  const gh=document.getElementById('scanGreet');if(gh){const h=new Date().getHours();const saud=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';const nome=(session.name||'').split(' ')[0];gh.textContent=saud+(nome?', '+nome:'');}
   const ob=document.getElementById('onboard');
   if(ob){
     if(session.role==='dono'){
       const temD=db.depts.length>0,temP=Object.keys(db.products).length>0,temO=Object.values(db.profiles).some(p=>p.role==='operador');
       if(!temD||!temP||!temO){
         const ln=(ok,txt)=>'<div onclick="go(\'settings\')" style="display:flex;align-items:center;gap:9px;padding:5px 0;cursor:pointer"><span style="color:'+(ok?'var(--green)':'var(--muted)')+';font-weight:800">'+(ok?'✓':'○')+'</span><span style="'+(ok?'color:var(--dim);text-decoration:line-through':'')+'">'+txt+'</span></div>';
-        ob.innerHTML='<div class="imp-box" style="text-align:left;margin-bottom:14px"><div style="font-weight:700;margin-bottom:6px">👋 Comece por aqui</div>'+ln(temD,'Crie seus departamentos')+ln(temP,'Cadastre ou importe seus produtos')+ln(temO,'Convide sua equipe')+'</div>';
+        ob.innerHTML='<div class="imp-box" style="text-align:left;margin-bottom:14px"><div style="font-weight:700;margin-bottom:6px">Comece por aqui</div>'+ln(temD,'Crie seus departamentos')+ln(temP,'Cadastre ou importe seus produtos')+ln(temO,'Convide sua equipe')+'</div>';
       }else ob.innerHTML='';
     }else ob.innerHTML='';
   }
@@ -549,7 +549,7 @@ function deptOptions(sel){return db.depts.map(d=>'<option '+(d.name===sel?'selec
 async function openNewProductSheet(code){const isDono=session.role==='dono';const costField=isDono?'<div class="field"><label>Custo unitário (R$)</label><input id="np_cost" inputmode="decimal" placeholder="ex: 3,80"></div>':'<div class="field"><label>Custo unitário</label><div style="padding:13px 14px;background:var(--panel2);border:1px dashed var(--line);border-radius:10px;color:var(--dim);font-size:13px"><span class="lock">Definido pelo admin</span></div></div>';
   // consulta o catálogo compartilhado: se o código já é conhecido, sugere o nome
   let nome='';try{const {data}=await sb.from('global_products').select('name').eq('barcode',code).maybeSingle();if(data&&data.name)nome=data.name;}catch(e){}
-  const dica=nome?'<div class="sub" style="margin-top:-8px;margin-bottom:8px;color:var(--accent)">✨ Nome sugerido pelo catálogo — confira e ajuste se precisar</div>':'';
+  const dica=nome?'<div class="sub" style="margin-top:-8px;margin-bottom:8px;color:var(--accent)">Nome sugerido pelo catálogo — confira e ajuste se precisar</div>':'';
   sheet('<h3>Produto novo</h3><div class="sub">Código não está no seu cadastro. Registre uma vez.</div><div class="card-code">'+code+'</div>'+dica+'<div class="form-grid"><div class="field"><label>Nome do produto</label><input id="np_name" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="ex: Leite Cond. Moça 395g"></div><div class="field"><label>Departamento</label><select id="np_dept">'+deptOptions(db.depts[0]&&db.depts[0].name)+'</select></div>'+costField+'</div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="saveNewProduct(\''+code+'\')">Continuar</button></div>');}
 async function saveNewProduct(code){const name=document.getElementById('np_name').value.trim();if(!name){toast('Informe o nome','err');return;}const dept=document.getElementById('np_dept').value;let cost=null;if(session.role==='dono'){const c=document.getElementById('np_cost').value.replace(',','.');cost=c?parseFloat(c):null;}
   const d=db.depts.find(x=>x.name===dept);// achar o id do departamento escolhido
@@ -591,7 +591,7 @@ function gerarCartaz(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const p
   const validade=l.exp.split('-').reverse().join('/');
   const cell='<div class="sign"><div class="top"><div class="oferta">ESTA OFERTA<br>É <b>PARA VOCÊ</b></div></div><div class="white"><div class="pname">'+esc(p.name)+'</div>'+(precoN?'<div class="de"><span class="delbl">DE:</span> <span class="dval">'+precoN+'</span></div>':'')+'</div><div class="yellow"><div class="porline"><span class="porlbl">POR:</span><span class="por">'+precoP+'</span></div><div class="val">Válido até '+validade+'</div></div></div>';
   const css='*{box-sizing:border-box;margin:0;padding:0;font-family:Segoe UI,system-ui,-apple-system,sans-serif}body{background:#e9ecef}.bar{padding:14px 16px;max-width:794px;margin:0 auto}.pbtn{background:#E31837;color:#fff;border:none;padding:12px 18px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;width:100%}#doc{width:794px;height:1122px;margin:0 auto;background:#fff}.grid4{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;width:100%;height:100%}.sign{position:relative;display:flex;flex-direction:column;background:#E31837;border:1px dashed #bbb;overflow:hidden}.top{padding:22px 24px 14px}.oferta{color:#fff;font-weight:800;font-size:26px;line-height:1.1;letter-spacing:.5px}.oferta b{font-size:30px}.white{background:#fff;margin:0 18px;border-radius:14px 14px 0 0;padding:20px 22px 16px;flex:0 0 auto}.pname{font-weight:800;font-size:24px;color:#11161d;line-height:1.15;margin-bottom:14px}.de{font-size:30px;font-weight:800;color:#11161d;display:flex;align-items:center;gap:8px}.delbl{font-size:18px;font-weight:700;color:#444}.dval{position:relative;display:inline-block}.dval:after{content:"";position:absolute;left:-4px;right:-4px;top:55%;height:3px;background:#E31837;transform:rotate(-12deg)}.yellow{background:#FFE000;margin:0 18px 22px;border-radius:0 0 14px 14px;padding:18px 22px 20px;flex:1 1 auto;display:flex;flex-direction:column;justify-content:center}.porline{display:flex;align-items:baseline;gap:10px}.porlbl{font-size:24px;font-weight:800;color:#11161d}.por{font-size:62px;font-weight:800;color:#11161d;line-height:1}.val{margin-top:12px;font-size:15px;color:#11161d;font-weight:700}@media print{.bar{display:none}body{background:#fff}.sign,.white,.yellow,.dval:after{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
-  const html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Oferta — '+esc(p.name)+'</title><style>'+css+'</style></head><body><div class="bar"><button id="cbtn" class="pbtn" onclick="compartilhar()">📤 Compartilhar / Imprimir (PDF)</button></div><div id="fname" style="display:none">Oferta '+esc(p.name)+' '+dataArquivo()+'</div><div id="doc"><div class="grid4">'+cell+cell+cell+cell+'</div></div>'+REL_SCR+'</body></html>';
+  const html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Oferta — '+esc(p.name)+'</title><style>'+css+'</style></head><body><div class="bar"><button id="cbtn" class="pbtn" onclick="compartilhar()">Compartilhar / Imprimir (PDF)</button></div><div id="fname" style="display:none">Oferta '+esc(p.name)+' '+dataArquivo()+'</div><div id="doc"><div class="grid4">'+cell+cell+cell+cell+'</div></div>'+REL_SCR+'</body></html>';
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});const url=URL.createObjectURL(blob);const w=window.open(url,'_blank');if(!w){const a=document.createElement('a');a.href=url;a.download='oferta-stok.html';document.body.appendChild(a);a.click();a.remove();}setTimeout(()=>URL.revokeObjectURL(url),60000);closeSheet();}
 let baixaReason='',lastBaixas=[];
 function openBaixa(id){const l=db.lots.find(x=>x.id===id);if(!l)return;const p=db.products[l.code]||{name:l.code};baixaReason='';
@@ -610,7 +610,7 @@ function renderCritico(){
   let total=0;crit.forEach(l=>{if(l.p.cost!=null)total+=l.p.cost*l.qty;});
   document.getElementById('riskVal').textContent=fmt(total);
   document.getElementById('riskSub').textContent=crit.length+' lote(s) crítico(s)';
-  document.getElementById('deptBars').innerHTML=crit.length?crit.map(l=>{const dl=l.days===0?'hoje':l.days+(l.days===1?' dia':' dias');return '<div class="item crit" style="cursor:pointer" onclick="openLotEdit(\''+l.id+'\')"><div class="item-main"><div class="item-name">'+l.p.name+'</div><div class="item-meta"><span class="tag">'+l.p.dept+'</span><span class="tag lote">Lote '+l.lot+'</span><span>Qtd '+l.qty+'</span>'+(l.p.cost!=null?'<span class="tag">'+fmt(l.p.cost*l.qty)+'</span>':'')+'</div></div><div class="item-days"><div class="d">'+l.days+'</div><div class="lbl">'+dl+'</div></div></div>';}).join(''):'<div class="empty"><div class="ico">👍</div>Nenhum produto crítico agora</div>';
+  document.getElementById('deptBars').innerHTML=crit.length?crit.map(l=>{const dl=l.days===0?'hoje':l.days+(l.days===1?' dia':' dias');return '<div class="item crit" style="cursor:pointer" onclick="openLotEdit(\''+l.id+'\')"><div class="item-main"><div class="item-name">'+l.p.name+'</div><div class="item-meta"><span class="tag">'+l.p.dept+'</span><span class="tag lote">Lote '+l.lot+'</span><span>Qtd '+l.qty+'</span>'+(l.p.cost!=null?'<span class="tag">'+fmt(l.p.cost*l.qty)+'</span>':'')+'</div></div><div class="item-days"><div class="d">'+l.days+'</div><div class="lbl">'+dl+'</div></div></div>';}).join(''):'<div class="empty">Nenhum produto crítico agora</div>';
   _criticoPDF={crit,total};
 }
 async function shareReport(){
@@ -653,7 +653,7 @@ async function renderPerdas(){const el=document.getElementById('lossContent');el
   const depts=Object.entries(perdaDept).sort((a,b)=>b[1]-a[1]);const maxv=depts.length?depts[0][1]:1;
   const tops=Object.values(prodAgg).sort((a,b)=>b.val-a.val).slice(0,10);
   let html='<div class="risk-total"><div class="lbl">Perdido nos últimos 30 dias</div><div class="val">'+fmt(perda)+'</div><div class="sub">'+uL+' unidades descartadas</div></div>';
-  html+=depts.length?('<div class="sec"><h4>Perda por departamento</h4>'+depts.map(([d,v])=>'<div class="dept-bar"><div class="head"><span class="dn">'+d+'</span><span class="dv">'+fmt(v)+'</span></div><div class="meter"><div class="fill" style="width:'+Math.max(6,v/maxv*100)+'%"></div></div><div class="dcount">'+(perda?(v/perda*100).toFixed(0):0)+'% da perda total</div></div>').join('')+'</div>'):'<div class="empty"><div class="ico">👏</div>Nenhuma perda registrada no período</div>';
+  html+=depts.length?('<div class="sec"><h4>Perda por departamento</h4>'+depts.map(([d,v])=>'<div class="dept-bar"><div class="head"><span class="dn">'+d+'</span><span class="dv">'+fmt(v)+'</span></div><div class="meter"><div class="fill" style="width:'+Math.max(6,v/maxv*100)+'%"></div></div><div class="dcount">'+(perda?(v/perda*100).toFixed(0):0)+'% da perda total</div></div>').join('')+'</div>'):'<div class="empty">Nenhuma perda registrada no período</div>';
   if(tops.length)html+='<div class="sec"><h4>Top produtos perdidos</h4>'+tops.map((r,i)=>'<div class="item"><div class="item-main"><div class="item-name">'+(i+1)+'. '+r.name+'</div><div class="item-meta"><span class="tag">'+r.qty+' un.</span></div></div><div class="item-days"><div class="d" style="font-size:15px">'+fmt(r.val)+'</div></div></div>').join('')+'</div>';
   const s6=new Date();s6.setMonth(s6.getMonth()-5);s6.setDate(1);s6.setHours(0,0,0,0);
   const {data:bx}=await sb.from('baixas').select('qty, product_id, created_at').eq('reason','perdido').gte('created_at',s6.toISOString());
@@ -694,7 +694,7 @@ const REL_SCR='<scr'+'ipt src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10/dis
 function dataArquivo(){const d=new Date();return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0');}
 function abrirRelatorio(subtitulo,corpo,nomeArquivo){
   const hoje=new Date().toLocaleDateString('pt-BR');
-  const html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(nomeArquivo||('Stok — '+subtitulo))+'</title><style>'+REL_CSS+'</style></head><body><div class="bar"><button id="cbtn" class="pbtn" onclick="compartilhar()">📤 Compartilhar relatório (PDF)</button></div><div id="fname" style="display:none">'+esc(nomeArquivo||'Relatorio Stok')+'</div><div id="doc"><div class="hd"><div class="hdin"><div class="b">Sto<span>k</span></div><div class="meta"><div style="color:#e8edf2;font-weight:700;font-size:15px">'+esc(session.store||'')+'</div>'+esc(subtitulo)+' · '+hoje+'</div></div></div><div class="wrap">'+corpo+'<div class="ft">Gerado pelo Stok</div></div></div>'+REL_SCR+'</body></html>';
+  const html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(nomeArquivo||('Stok — '+subtitulo))+'</title><style>'+REL_CSS+'</style></head><body><div class="bar"><button id="cbtn" class="pbtn" onclick="compartilhar()">Compartilhar relatório (PDF)</button></div><div id="fname" style="display:none">'+esc(nomeArquivo||'Relatorio Stok')+'</div><div id="doc"><div class="hd"><div class="hdin"><div class="b">Sto<span>k</span></div><div class="meta"><div style="color:#e8edf2;font-weight:700;font-size:15px">'+esc(session.store||'')+'</div>'+esc(subtitulo)+' · '+hoje+'</div></div></div><div class="wrap">'+corpo+'<div class="ft">Gerado pelo Stok</div></div></div>'+REL_SCR+'</body></html>';
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});const url=URL.createObjectURL(blob);
   const w=window.open(url,'_blank');
   if(!w){const a=document.createElement('a');a.href=url;a.download='relatorio-stok.html';document.body.appendChild(a);a.click();a.remove();}
@@ -746,7 +746,7 @@ function renderProdSearch(){
   const el=document.getElementById('prodSearchResults');if(!el)return;
   const fmtCap=(list,header)=>{const cap=list.slice(0,50);return header+cap.map(([c,p])=>_prodItem(c,p)).join('')+(list.length>50?'<div style="text-align:center;color:var(--dim);font-size:12px;padding:8px">+ '+(list.length-50)+' — use a busca</div>':'');};
   if(q){const list=Object.entries(db.products).filter(([code,p])=>p.name.toLowerCase().includes(q)||code.includes(q)).sort((a,b)=>a[1].name.localeCompare(b[1].name));el.innerHTML=list.length?fmtCap(list,''):'<div style="color:var(--dim);font-size:13px;padding:8px 0">Nenhum produto encontrado</div>';return;}
-  if(_prodFilter==='semcusto'){const list=Object.entries(db.products).filter(([c,p])=>p.cost==null).sort((a,b)=>a[1].name.localeCompare(b[1].name));el.innerHTML=list.length?fmtCap(list,'<div class="recent-h">Sem custo — toque pra corrigir ('+list.length+')</div>'):'<div style="color:var(--dim);font-size:13px;padding:8px 0">Todos com custo 👍</div>';return;}
+  if(_prodFilter==='semcusto'){const list=Object.entries(db.products).filter(([c,p])=>p.cost==null).sort((a,b)=>a[1].name.localeCompare(b[1].name));el.innerHTML=list.length?fmtCap(list,'<div class="recent-h">Sem custo — toque pra corrigir ('+list.length+')</div>'):'<div style="color:var(--dim);font-size:13px;padding:8px 0">Todos com custo</div>';return;}
   const all=Object.entries(db.products).sort((a,b)=>a[1].name.localeCompare(b[1].name));
   if(!all.length){el.innerHTML='<div style="color:var(--dim);font-size:13px;padding:8px 0">Nenhum produto cadastrado ainda</div>';return;}
   let html='<div class="recent-h" style="cursor:pointer" onclick="toggleProdExpand()">Todos os produtos ('+all.length+') '+(_prodExpanded?'▾':'▸')+'</div>';
@@ -761,7 +761,7 @@ function renderConta(){const el=document.getElementById('contaInfo');if(!el)retu
   else{const hoje=new Date();hoje.setHours(0,0,0,0);const pu=new Date(session.paidUntil+'T00:00:00');const dias=Math.round((pu-hoje)/86400000);const venc=dias<0;const dt=pu.toLocaleDateString('pt-BR');ass='<div style="background:'+(venc?'var(--red-soft)':'var(--green-soft)')+';border:1px solid '+(venc?'var(--red)':'var(--green)')+';border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px"><b>Assinatura:</b> '+(venc?('vencida em '+dt):('ativa até '+dt+' ('+dias+' dia'+(dias===1?'':'s')+')'))+'</div>';}
   el.innerHTML=ass;}
 async function salvarNome(){const nome=document.getElementById('ac_name').value.trim();if(!nome){toast('Informe o nome','err');return;}const {error}=await sb.from('profiles').update({name:nome}).eq('id',session.userId);if(error){toast('Erro ao salvar','err');return;}session.name=nome;document.getElementById('tbRole').textContent=session.name;toast('Nome atualizado');}
-async function salvarSenha(){const p=document.getElementById('ac_pass').value;if(!p||p.length<6){toast('Senha: mínimo 6 caracteres','err');return;}const {error}=await sb.auth.updateUser({password:p});if(error){toast('Erro ao trocar senha','err');return;}document.getElementById('ac_pass').value='';toast('Senha atualizada ✓');}
+async function salvarSenha(){const p=document.getElementById('ac_pass').value;if(!p||p.length<6){toast('Senha: mínimo 6 caracteres','err');return;}const {error}=await sb.auth.updateUser({password:p});if(error){toast('Erro ao trocar senha','err');return;}document.getElementById('ac_pass').value='';toast('Senha atualizada');}
 async function renderInvites(){
   const el=document.getElementById('pendingInvites');if(!el)return;
   const {data}=await sb.from('invites').select('id, code, role, expires_at, used').eq('used',false).order('created_at',{ascending:false});
@@ -845,7 +845,7 @@ async function commitNFe(){const parsed=window._nfeParsed||[];const dPad=db.dept
   closeSheet();renderScan();toast(parsed.length+' produtos importados da nota');}
 // ===== Notificações push (Fase 1: inscrição) =====
 function pushSuportado(){return ('Notification' in window)&&('serviceWorker' in navigator)&&('PushManager' in window);}
-function refreshNotifBanner(){const nb=document.getElementById('notifBanner');if(!nb)return;if(!pushSuportado()||Notification.permission==='granted'){nb.innerHTML='';return;}nb.innerHTML='<div class="banner info" style="cursor:pointer" onclick="enableNotif()"><span>🔔</span><div>Ativar avisos diários de vencimento neste aparelho</div></div>';}
+function refreshNotifBanner(){const nb=document.getElementById('notifBanner');if(!nb)return;if(!pushSuportado()||Notification.permission==='granted'){nb.innerHTML='';return;}nb.innerHTML='<div class="banner info" style="cursor:pointer" onclick="enableNotif()"><span>i</span><div>Ativar avisos diários de vencimento neste aparelho</div></div>';}
 function b64ToUint8(b64){const pad='='.repeat((4-b64.length%4)%4);const base=(b64+pad).replace(/-/g,'+').replace(/_/g,'/');const raw=atob(base);const arr=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);return arr;}
 // re-sincroniza a inscrição a cada login (se a permissão já foi dada) — mantém o banco sempre atualizado
 async function syncPush(){
@@ -868,7 +868,7 @@ async function enableNotif(){
     const j=sub.toJSON();
     const {error}=await sb.from('push_subscriptions').upsert({store_id:session.storeId,profile_id:session.userId,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth},{onConflict:'endpoint'});
     if(error){toast('Erro ao salvar inscrição','err');return;}
-    toast('Avisos ativados ✓');refreshNotifBanner();
+    toast('Avisos ativados');refreshNotifBanner();
   }catch(e){toast('Não foi possível ativar os avisos','err');}
 }
 function toast(msg,type){const t=document.createElement('div');t.className='toast'+(type==='err'?' err':'');t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2400);}
