@@ -49,8 +49,15 @@
   .view{padding:18px}
   .view-title{font-size:22px; font-weight:800; letter-spacing:-.5px; margin-bottom:2px}
   .view-sub{color:var(--muted); font-size:13px; margin-bottom:20px}
-  #scanArea{background:#000; border-radius:var(--radius); overflow:hidden; position:relative; height:180px; display:flex; align-items:center; justify-content:center; margin-bottom:12px}
-  #scanArea video{width:100%; height:100%; object-fit:cover}
+  .scan-cta{width:100%; padding:16px; background:var(--red); color:#fff; font-weight:700; border-radius:12px; font-size:16px; margin-bottom:12px; display:flex; align-items:center; justify-content:center; gap:9px; transition:transform .08s}
+  .scan-cta:active{transform:scale(.99)}
+  #scanFull{position:fixed; inset:0; z-index:80; background:#000}
+  #scanFull video{width:100%; height:100%; object-fit:cover}
+  .scan-top{position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; padding:16px; z-index:2}
+  .scan-x{width:42px; height:42px; border-radius:50%; background:rgba(0,0,0,.55); color:#fff; font-size:20px; display:flex; align-items:center; justify-content:center}
+  .scan-torch{width:42px; height:42px; border-radius:50%; background:rgba(0,0,0,.55); font-size:20px}
+  .scan-torch.on{background:var(--amber)}
+  .scan-status2{position:absolute; bottom:46px; left:0; right:0; text-align:center; color:#fff; font-size:15px; text-shadow:0 1px 4px rgba(0,0,0,.9); padding:0 20px}
   .scan-overlay{position:absolute; inset:0; pointer-events:none}
   .scan-frame{position:absolute; left:14%; right:14%; top:30%; bottom:30%; border:2px solid var(--red); border-radius:8px; box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
   .scan-laser{position:absolute; left:14%; right:14%; height:2px; background:var(--red); box-shadow:0 0 8px var(--red); animation:laser 2s ease-in-out infinite}
@@ -200,14 +207,8 @@
     <div id="scanStats"></div>
     <div id="acoesHoje"></div>
     <div id="notifBanner"></div>
-    <div id="scanArea">
-      <div class="scan-placeholder" id="scanPlaceholder">Toque em Câmera para escanear<br><small>ou digite o código abaixo</small></div>
-      <video id="video" class="hidden" playsinline></video>
-      <div class="scan-overlay hidden" id="scanOverlay"><div class="scan-frame"></div><div class="scan-laser"></div></div>
-    </div>
-    <div class="scan-status" id="scanStatus"></div>
-    <div class="input-row"><button id="camBtn" class="full" onclick="toggleCam()">Câmera</button><button id="torchBtn" class="hidden" onclick="toggleTorch()" title="Lanterna">🔦</button></div>
-    <div class="input-row"><input id="manualCode" inputmode="numeric" placeholder="Código de barras"><button onclick="handleCode(document.getElementById('manualCode').value)">OK</button></div>
+    <button class="scan-cta" onclick="toggleCam()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10"/></svg>Escanear produto</button>
+    <div class="input-row"><input id="manualCode" inputmode="numeric" placeholder="ou digite o código de barras"><button onclick="handleCode(document.getElementById('manualCode').value)">OK</button></div>
     <div id="recentLots"></div>
   </div>
   <div class="view hidden" id="v-alerts">
@@ -303,6 +304,12 @@
   <p style="color:var(--muted);margin:12px 0 18px" id="blkMsg"></p>
   <p style="color:var(--dim);font-size:13px" id="blkSub"></p>
   <button class="logout" style="margin-top:22px" onclick="doLogout()">Sair</button>
+</div>
+<div id="scanFull" class="hidden">
+  <video id="video" playsinline></video>
+  <div class="scan-overlay" id="scanOverlay"><div class="scan-frame"></div><div class="scan-laser"></div></div>
+  <div class="scan-top"><button class="scan-x" onclick="stopCam()">✕</button><button id="torchBtn" class="scan-torch hidden" onclick="toggleTorch()" title="Lanterna">🔦</button></div>
+  <div class="scan-status2" id="scanStatus">Aponte para o código de barras...</div>
 </div>
 <script>
 // ===== Conexão com o Supabase (Semana 2) =====
@@ -502,20 +509,20 @@ function camTrack(){const v=document.getElementById('video');const s=v&&v.srcObj
 function maybeShowTorch(){const t=camTrack();const cap=(t&&t.getCapabilities)?t.getCapabilities():{};document.getElementById('torchBtn').classList.toggle('hidden',!(cap&&cap.torch));}
 async function toggleTorch(){const t=camTrack();if(!t)return;torchOn=!torchOn;try{await t.applyConstraints({advanced:[{torch:torchOn}]});document.getElementById('torchBtn').classList.toggle('on',torchOn);}catch(e){toast('Lanterna indisponível neste aparelho','err');torchOn=false;}}
 async function toggleCam(){if(scanning){stopCam();return;}
-  if(!window.ZXing){setStatus('Leitor não carregou. Verifique a internet e recarregue.');return;}
+  if(!window.ZXing){toast('Leitor não carregou. Recarregue a página.','err');return;}
   try{
     // restringe a leitura aos padrões do varejo brasileiro: EAN-13 e EAN-8
     const hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8]);
     codeReader=new ZXing.BrowserMultiFormatReader(hints);
+    document.getElementById('scanFull').classList.remove('hidden');
     const video=document.getElementById('video');
-    video.classList.remove('hidden');document.getElementById('scanPlaceholder').classList.add('hidden');document.getElementById('scanOverlay').classList.remove('hidden');document.getElementById('camBtn').textContent='Parar';
     scanning=true;setStatus('Aponte para o código de barras...');
-    // leu o código: confirma (bipe/vibra), desliga a câmera e abre a tela
+    // leu o código: confirma (bipe/vibra), fecha a câmera e abre a tela
     await codeReader.decodeFromConstraints({video:{facingMode:'environment'}},video,(result)=>{if(result&&scanning){feedbackScan();stopCam();handleCode(result.getText());}});
     maybeShowTorch();
-  }catch(e){setStatus('Câmera indisponível. Use o campo manual.');document.getElementById('camBtn').textContent='Câmera';scanning=false;}}
-function stopCam(){scanning=false;scanLocked=false;const t=camTrack();if(t&&torchOn){try{t.applyConstraints({advanced:[{torch:false}]});}catch(e){}}torchOn=false;document.getElementById('torchBtn')?.classList.add('hidden');document.getElementById('torchBtn')?.classList.remove('on');if(codeReader){codeReader.reset();codeReader=null;}const v=document.getElementById('video');if(v){v.classList.add('hidden');v.srcObject=null;}document.getElementById('scanOverlay')?.classList.add('hidden');document.getElementById('scanPlaceholder')?.classList.remove('hidden');const b=document.getElementById('camBtn');if(b)b.textContent='Câmera';}
-function setStatus(t){document.getElementById('scanStatus').textContent=t;}
+  }catch(e){toast('Câmera indisponível. Use o campo manual.','err');document.getElementById('scanFull').classList.add('hidden');scanning=false;}}
+function stopCam(){scanning=false;scanLocked=false;const t=camTrack();if(t&&torchOn){try{t.applyConstraints({advanced:[{torch:false}]});}catch(e){}}torchOn=false;document.getElementById('torchBtn')?.classList.add('hidden');document.getElementById('torchBtn')?.classList.remove('on');if(codeReader){codeReader.reset();codeReader=null;}const v=document.getElementById('video');if(v){v.srcObject=null;}document.getElementById('scanFull')?.classList.add('hidden');}
+function setStatus(t){const e=document.getElementById('scanStatus');if(e)e.textContent=t;}
 function handleCode(raw){const code=(raw||'').trim();if(!code){toast('Código vazio','err');return;}document.getElementById('manualCode').value='';if(db.products[code])openLotSheet(code);else openNewProductSheet(code);}
 function sheet(html){closeSheet();const bg=document.createElement('div');bg.className='sheet-bg';bg.id='sheetBg';bg.innerHTML='<div class="sheet">'+html+'</div>';bg.addEventListener('click',e=>{if(e.target===bg)closeSheet()});document.body.appendChild(bg);}
 function closeSheet(){document.getElementById('sheetBg')?.remove();}
