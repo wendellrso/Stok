@@ -714,7 +714,20 @@ async function renderPainel(){
     card(vencN,'Vencidos na loja','para recolher','var(--red)',"goAlertas('expired')")+
     card(fmt(perdaMes),'Perdas no mês','jogado fora','var(--red)',"repTab('loss')")+
     card(saidasMes,'Saídas no mês','vendido + oferta (un)','var(--green)',"repTab('mov')")+
-  '</div><div class="sec" style="margin-top:16px"><h4>Parecer do mês</h4><div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.7">'+par.map(p=>'• '+p).join('<br>')+'</div></div>';
+  '</div><div class="sec" style="margin-top:16px"><h4>Parecer do mês</h4><div id="parecerBox" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.7">'+par.map(p=>'• '+p).join('<br>')+'</div></div>';
+  gerarParecerIA({store:session.store,mes:ini.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}),perdaMes,perdaPrev,critN,vencN,saidasMes,topDept:(topDept&&topDept[1]>0)?{name:topDept[0],val:topDept[1]}:null,topProd:(topProd&&topProd[1].q>0)?{name:topProd[0],q:topProd[1].q}:null});
+}
+async function gerarParecerIA(p){
+  const box=document.getElementById('parecerBox');if(!box)return;
+  const sig=[p.store,p.mes,p.perdaMes,p.perdaPrev,p.critN,p.vencN,p.saidasMes,p.topDept&&p.topDept.name,p.topProd&&(p.topProd.name+p.topProd.q)].join('|');
+  try{const c=JSON.parse(localStorage.getItem('stok_parecer_'+session.storeId)||'null');if(c&&c.sig===sig&&c.html){box.innerHTML=c.html;return;}}catch(e){}
+  try{
+    const {data,error}=await sb.functions.invoke('parecer',{body:p});
+    if(error||!data||!data.text)return;// mantém o parecer por regras (fallback)
+    const html=esc(data.text).replace(/\n+/g,'<br>');
+    if(document.getElementById('parecerBox')===box)box.innerHTML=html;
+    try{localStorage.setItem('stok_parecer_'+session.storeId,JSON.stringify({sig,html}));}catch(e){}
+  }catch(e){}
 }
 let _perdasPDF=null,_movPDF=null;
 async function renderPerdas(){const el=document.getElementById('lossContent');el.innerHTML='<div class="empty">Carregando...</div>';
