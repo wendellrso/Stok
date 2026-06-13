@@ -284,7 +284,7 @@
       <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Minhas lojas</div><div class="cfg-d">Trocar de loja ou abrir uma nova</div></div><span class="cfg-chev">▸</span></div>
       <div class="cfg-body">
         <div id="minhasLojas"></div>
-        <button class="btn-up" style="width:100%;margin-top:4px" onclick="openNewStore()">+ Criar nova loja</button>
+        <button class="btn-up" style="width:100%;margin-top:4px" onclick="openNewStore()">+ Adicionar filial</button>
       </div>
     </div>
     <div class="cfg-card">
@@ -435,16 +435,16 @@ function openStoreSwitcher(){
 }
 function renderMinhasLojas(){const el=document.getElementById('minhasLojas');if(!el)return;el.innerHTML=(session.stores||[]).map(_lojaItem).join('');}
 function openNewStore(){
-  sheet('<h3>Criar nova loja</h3><div class="sub">Você será o administrador dela. Ela nasce com os mesmos departamentos desta loja, e você pode trocar entre lojas quando quiser.</div><div class="field"><label>Nome da empresa</label><input id="ns_name" placeholder="ex: Mercado Centro"></div><div class="field" style="margin-top:12px"><label>CNPJ <span style="color:var(--dim);font-weight:400">(opcional)</span></label><input id="ns_cnpj" inputmode="numeric" placeholder="00.000.000/0000-00" oninput="maskCNPJ(this)"></div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="criarNovaLoja()">Criar loja</button></div>');
+  sheet('<h3>Adicionar filial</h3><div class="sub">Você será o administrador dela. Ela nasce com os mesmos departamentos desta loja, e você pode trocar entre lojas quando quiser.</div><div class="field"><label>Nome da empresa</label><input id="ns_name" placeholder="ex: Mercado Centro"></div><div class="field" style="margin-top:12px"><label>CNPJ</label><input id="ns_cnpj" inputmode="numeric" placeholder="00.000.000/0000-00" oninput="maskCNPJ(this)"></div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="criarNovaLoja()">Criar filial</button></div>');
 }
 async function criarNovaLoja(){
   const nome=document.getElementById('ns_name').value.trim();
   const cnpj=document.getElementById('ns_cnpj').value.replace(/\D/g,'');
-  if(!nome){toast('Informe o nome da empresa','err');return;}
-  if(cnpj&&cnpj.length!==14){toast('CNPJ deve ter 14 dígitos','err');return;}
-  const {error}=await sb.rpc('create_store_and_owner',{p_name:nome,p_cnpj:cnpj||null,p_user_name:session.name||''});
-  if(error){toast(/duplicate|unique|23505/i.test(error.message)?'CNPJ já cadastrado em outra loja':(error.message||'Erro ao criar loja'),'err');return;}
-  toast('Loja criada');location.reload();
+  if(!nome||!cnpj){toast('Nome da empresa e CNPJ são obrigatórios','err');return;}
+  if(cnpj.length!==14){toast('CNPJ deve ter 14 dígitos','err');return;}
+  const {error}=await sb.rpc('create_store_and_owner',{p_name:nome,p_cnpj:cnpj,p_user_name:session.name||''});
+  if(error){toast(/duplicate|unique|23505/i.test(error.message)?'CNPJ já cadastrado em outra loja':(error.message||'Erro ao criar filial'),'err');return;}
+  closeSheet();toast('Filial criada');setTimeout(()=>location.reload(),900);
 }
 async function switchStore(id){
   if(id===session.storeId){closeSheet();return;}
