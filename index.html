@@ -320,8 +320,8 @@
     </div>
   </div>
   <div class="nav" id="nav">
-    <button data-view="scan" class="active" onclick="go('scan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10"/></svg>Lançar</button>
-    <button data-view="alerts" onclick="go('alerts')"><span class="nav-badge hidden" id="alertBadge">0</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 00-7 7c0 5-3 7-3 7h20s-3-2-3-7a7 7 0 00-7-7zM10 21a2 2 0 004 0"/></svg>Alertas</button>
+    <button data-view="scan" class="active" onclick="go('scan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10"/></svg>Início</button>
+    <button data-view="alerts" onclick="go('alerts')"><span class="nav-badge hidden" id="alertBadge">0</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 00-7 7c0 5-3 7-3 7h20s-3-2-3-7a7 7 0 00-7-7zM10 21a2 2 0 004 0"/></svg>Vencimentos</button>
     <button data-view="report" id="navReport" onclick="go('report')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 16l4-6 3 3 5-7"/></svg>Relatório</button>
     <button data-view="products" id="navProducts" onclick="go('products')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12l8.73-5.04M12 22V12"/></svg>Produtos</button>
     <button data-view="settings" id="navSettings" onclick="go('settings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 00-1.7-1L14.5 2h-5l-.3 2.5a7 7 0 00-1.7 1l-2.4-1-2 3.5L2.6 11a7 7 0 000 2l-2 1.5 2 3.5 2.4-1a7 7 0 001.7 1L9.5 22h5l.3-2.5a7 7 0 001.7-1l2.4 1 2-3.5-2-1.5a7 7 0 00.1-1z"/></svg>Config</button>
@@ -565,7 +565,7 @@ function renderScan(){
   const ah=document.getElementById('acoesHoje');
   if(ah){let it='';
     if(venc>0)it+='<div onclick="goAlertas(\'expired\')" style="cursor:pointer;background:var(--red-soft);border:1px solid var(--red);border-radius:10px;padding:11px 13px;margin-bottom:8px;font-size:14px">🔴 <b>'+venc+'</b> vencido(s) — recolher da prateleira ›</div>';
-    if(crit>0)it+='<div onclick="goAlertas(\'d7\')" style="cursor:pointer;background:var(--amber-soft);border:1px solid var(--amber);border-radius:10px;padding:11px 13px;margin-bottom:8px;font-size:14px">🟡 <b>'+crit+'</b> vencendo logo — promover/vender ›</div>';
+    if(crit>0)it+='<div onclick="goAlertas(\'d7\')" style="cursor:pointer;background:var(--amber-soft);border:1px solid var(--amber);border-radius:10px;padding:11px 13px;margin-bottom:8px;font-size:14px">🟡 <b>'+crit+'</b> vencendo logo — fazer oferta ›</div>';
     ah.innerHTML=it?('<div class="recent-h">Ações de hoje</div>'+it):'';
   }
   refreshNotifBanner();
