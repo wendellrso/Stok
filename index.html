@@ -194,16 +194,7 @@
     <div class="field"><label>Senha</label><div class="pass-wrap"><input id="loginPass" type="password" placeholder="********" autocomplete="current-password"><button type="button" class="eye" onclick="togglePass('loginPass',this)"></button></div></div>
     <label class="keep"><input type="checkbox" id="keepLogged" checked> Manter conectado</label>
     <button class="btn-primary" type="submit">Entrar</button>
-    <div class="login-hint">Esqueceu a senha? <span style="color:var(--accent);cursor:pointer" onclick="forgotPassword()">Recuperar</span><br>Recebeu um <b>convite</b>? <span style="color:var(--accent);cursor:pointer" onclick="showSignup()">Criar conta</span><br>Tem uma loja? <span style="color:var(--accent);cursor:pointer" onclick="showOwner()">Cadastrar minha loja</span></div>
-  </form>
-  <form id="ownerForm" class="hidden" onsubmit="event.preventDefault();doOwnerSignup();">
-    <div class="field"><label>Nome da empresa</label><input id="owStore" placeholder="ex: Mercado do João"></div>
-    <div class="field"><label>CNPJ <span style="color:var(--dim);font-weight:400">(opcional)</span></label><input id="owCnpj" inputmode="numeric" placeholder="00.000.000/0000-00" oninput="maskCNPJ(this)"></div>
-    <div class="field"><label>Seu nome</label><input id="owName" placeholder="ex: João" autocomplete="name"></div>
-    <div class="field"><label>E-mail</label><input id="owEmail" type="email" placeholder="voce@email.com" autocomplete="username"></div>
-    <div class="field"><label>Senha</label><div class="pass-wrap"><input id="owPass" type="password" placeholder="crie uma senha" autocomplete="new-password"><button type="button" class="eye" onclick="togglePass('owPass',this)"></button></div></div>
-    <button class="btn-primary" type="submit">Criar loja</button>
-    <div class="login-hint">Já tem conta? <span style="color:var(--accent);cursor:pointer" onclick="showLogin()">Entrar</span></div>
+    <div class="login-hint">Esqueceu a senha? <span style="color:var(--accent);cursor:pointer" onclick="forgotPassword()">Recuperar</span><br>Recebeu um <b>convite</b>? <span style="color:var(--accent);cursor:pointer" onclick="showSignup()">Criar conta</span></div>
   </form>
   <form id="signupForm" class="hidden" onsubmit="event.preventDefault();doSignup();">
     <div class="field"><label>Código do convite</label><input id="suCode" placeholder="ex: K7P2" autocapitalize="characters"></div>
@@ -287,6 +278,13 @@
         <div class="field"><label>Nome da empresa</label><input id="lj_name" placeholder="Ex: Mercado do João"></div>
         <div class="field" style="margin-top:12px"><label>CNPJ</label><input id="lj_cnpj" inputmode="numeric" placeholder="00.000.000/0000-00" oninput="maskCNPJ(this)"></div>
         <button class="btn-model" style="width:100%;margin-top:12px" onclick="salvarLoja()">Salvar dados da loja</button>
+      </div>
+    </div>
+    <div class="cfg-card">
+      <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Minhas lojas</div><div class="cfg-d">Trocar de loja ou abrir uma nova</div></div><span class="cfg-chev">▸</span></div>
+      <div class="cfg-body">
+        <div id="minhasLojas"></div>
+        <button class="btn-up" style="width:100%;margin-top:4px" onclick="openNewStore()">+ Criar nova loja</button>
       </div>
     </div>
     <div class="cfg-card">
@@ -383,10 +381,9 @@ async function carregarPerfilEIniciar(userId,email){
   startApp();
 }
 // ===== Cadastro por convite =====
-function showForm(id){['loginForm','signupForm','ownerForm'].forEach(f=>document.getElementById(f).classList.toggle('hidden',f!==id));}
+function showForm(id){['loginForm','signupForm'].forEach(f=>document.getElementById(f).classList.toggle('hidden',f!==id));}
 function showSignup(){showForm('signupForm');}
 function showLogin(){showForm('loginForm');}
-function showOwner(){showForm('ownerForm');}
 const EYE_ON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-7-11-7a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 function togglePass(id,btn){const i=document.getElementById(id);if(i.type==='password'){i.type='text';btn.innerHTML=EYE_OFF;}else{i.type='password';btn.innerHTML=EYE_ON;}}
@@ -429,35 +426,16 @@ async function doSignup(){
   toast('Conta criada');
   await carregarPerfilEIniciar(su.user.id,email);
 }
-// ===== Auto-cadastro de dono (cria loja) =====
-async function doOwnerSignup(){
-  const empresa=document.getElementById('owStore').value.trim();
-  const cnpj=document.getElementById('owCnpj').value.replace(/\D/g,'');
-  const nome=document.getElementById('owName').value.trim();
-  const email=document.getElementById('owEmail').value.trim().toLowerCase();
-  const pass=document.getElementById('owPass').value;
-  if(!empresa||!nome||!email||!pass){toast('Preencha empresa, nome, e-mail e senha','err');return;}
-  if(pass.length<6){toast('Senha: mínimo 6 caracteres','err');return;}
-  if(cnpj&&cnpj.length!==14){toast('CNPJ deve ter 14 dígitos','err');return;}
-  try{localStorage.setItem('stok_keep','1');}catch(e){}
-  const {data:su,error:suErr}=await sb.auth.signUp({email,password:pass});
-  if(suErr){toast(/already|registered/i.test(suErr.message)?'E-mail já cadastrado':'Erro ao criar conta','err');return;}
-  if(!su.user){toast('Erro ao criar conta','err');return;}
-  const {error:cErr}=await sb.rpc('create_store_and_owner',{p_name:empresa,p_cnpj:cnpj||null,p_user_name:nome});
-  if(cErr){toast(/duplicate|unique|23505/i.test(cErr.message)?'CNPJ já cadastrado em outra loja':(cErr.message||'Erro ao criar loja'),'err');return;}
-  toast('Loja criada');
-  await carregarPerfilEIniciar(su.user.id,email);
-}
 // ===== Troca de loja (multi-loja) =====
+function _lojaItem(s){const ativa=s.id===session.storeId;return '<div onclick="switchStore(\''+s.id+'\')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border:1px solid '+(ativa?'var(--accent)':'var(--line)')+';border-radius:10px;margin-bottom:8px;cursor:pointer;background:'+(ativa?'var(--panel2)':'transparent')+'"><div><div style="font-weight:700">'+s.name+'</div><div style="font-size:12px;color:var(--muted)">'+(s.role==='admin'?'Admin':'Operador')+(s.cnpj?' · '+fmtCNPJ(s.cnpj):'')+(ativa?' · atual':'')+'</div></div>'+(ativa?'<span style="color:var(--accent);font-weight:800">●</span>':'')+'</div>';}
 function openStoreSwitcher(){
-  const multi=session.stores&&session.stores.length>1;
-  if(!multi&&session.role!=='dono')return;
-  const itens=(session.stores||[]).map(s=>{const ativa=s.id===session.storeId;return '<div onclick="switchStore(\''+s.id+'\')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border:1px solid '+(ativa?'var(--accent)':'var(--line)')+';border-radius:10px;margin-bottom:8px;cursor:pointer;background:'+(ativa?'var(--panel2)':'transparent')+'"><div><div style="font-weight:700">'+s.name+'</div><div style="font-size:12px;color:var(--muted)">'+(s.role==='admin'?'Admin':'Operador')+(s.cnpj?' · '+fmtCNPJ(s.cnpj):'')+'</div></div>'+(ativa?'<span style="color:var(--accent);font-weight:800">●</span>':'')+'</div>';}).join('');
-  const novo=session.role==='dono'?'<button class="btn-up" style="width:100%;margin-top:4px" onclick="openNewStore()">+ Criar nova loja</button>':'';
-  sheet('<h3>Suas lojas</h3><div class="sub">Escolha qual loja você quer ver agora.</div>'+itens+novo+'<div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Fechar</button></div>');
+  if(!session.stores||session.stores.length<2)return;
+  const itens=session.stores.map(_lojaItem).join('');
+  sheet('<h3>Trocar de loja</h3><div class="sub">Escolha qual loja você quer ver agora.</div>'+itens+'<div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Fechar</button></div>');
 }
+function renderMinhasLojas(){const el=document.getElementById('minhasLojas');if(!el)return;el.innerHTML=(session.stores||[]).map(_lojaItem).join('');}
 function openNewStore(){
-  sheet('<h3>Criar nova loja</h3><div class="sub">Você será o administrador dela. Pode trocar entre lojas a qualquer momento.</div><div class="field"><label>Nome da empresa</label><input id="ns_name" placeholder="ex: Mercado Centro"></div><div class="field" style="margin-top:12px"><label>CNPJ <span style="color:var(--dim);font-weight:400">(opcional)</span></label><input id="ns_cnpj" inputmode="numeric" placeholder="00.000.000/0000-00" oninput="maskCNPJ(this)"></div><div class="sheet-actions"><button class="btn-ghost" onclick="openStoreSwitcher()">Voltar</button><button class="btn-go" onclick="criarNovaLoja()">Criar loja</button></div>');
+  sheet('<h3>Criar nova loja</h3><div class="sub">Você será o administrador dela. Ela nasce com os mesmos departamentos desta loja, e você pode trocar entre lojas quando quiser.</div><div class="field"><label>Nome da empresa</label><input id="ns_name" placeholder="ex: Mercado Centro"></div><div class="field" style="margin-top:12px"><label>CNPJ <span style="color:var(--dim);font-weight:400">(opcional)</span></label><input id="ns_cnpj" inputmode="numeric" placeholder="00.000.000/0000-00" oninput="maskCNPJ(this)"></div><div class="sheet-actions"><button class="btn-ghost" onclick="closeSheet()">Cancelar</button><button class="btn-go" onclick="criarNovaLoja()">Criar loja</button></div>');
 }
 async function criarNovaLoja(){
   const nome=document.getElementById('ns_name').value.trim();
@@ -505,7 +483,7 @@ function subStatus(){
   return {state:'ok'};
 }
 function showBlocked(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.add('hidden');document.getElementById('blocked').classList.remove('hidden');const isDono=session.role==='dono';document.getElementById('blkTitle').textContent=isDono?'Assinatura vencida':'Acesso indisponível';document.getElementById('blkMsg').innerHTML=isDono?('A loja <b>'+(session.store||'')+'</b> está com a assinatura vencida. Regularize para voltar a usar o Stok.<br><br><b>Seus dados estão guardados</b> — nada foi perdido.'):'O acesso a esta loja está temporariamente indisponível.';document.getElementById('blkSub').textContent=isDono?'Fale com o suporte para regularizar o pagamento.':'Fale com o responsável pela loja.';stopCam();}
-async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(session.role==='dono'&&st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';const canSwitch=(session.stores&&session.stores.length>1)||session.role==='dono';document.getElementById('tbStore').innerHTML=session.store+(canSwitch?' <span style="opacity:.7;font-size:11px">▾</span>':'');document.getElementById('tbStoreWrap').style.cursor=canSwitch?'pointer':'default';const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navProducts').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);document.getElementById('appLoading').classList.remove('hidden');await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();document.getElementById('appLoading').classList.add('hidden');updateAlertBadge();syncPush();go('scan');}
+async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(session.role==='dono'&&st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';const canSwitch=session.stores&&session.stores.length>1;document.getElementById('tbStore').innerHTML=session.store+(canSwitch?' <span style="opacity:.7;font-size:11px">▾</span>':'');document.getElementById('tbStoreWrap').style.cursor=canSwitch?'pointer':'default';const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navProducts').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);document.getElementById('appLoading').classList.remove('hidden');await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();document.getElementById('appLoading').classList.add('hidden');updateAlertBadge();syncPush();go('scan');}
 function go(view){['scan','alerts','report','products','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('painel');if(view==='products')renderProdutos();if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
   const {data,error}=await sb.from('departments').select('id, name, alert_days').order('name');
@@ -823,7 +801,7 @@ function renderProdSearch(){
   if(_prodExpanded)html+=fmtCap(all,'');
   el.innerHTML=html;
 }
-function renderSettings(){document.getElementById('deptList').innerHTML=db.depts.map((d,i)=>'<div class="dept-row"><input class="dname" value="'+d.name.replace(/"/g,'&quot;')+'" onchange="setDeptName('+i+',this.value)"><input class="days" type="number" value="'+d.alertDays+'" onchange="setDeptDays('+i+',this.value)"><span class="dunit">dias</span><button class="del" onclick="delDept('+i+')">x</button></div>').join('');renderTeamAreas();renderInvites();renderConta();renderLojaDados();}
+function renderSettings(){document.getElementById('deptList').innerHTML=db.depts.map((d,i)=>'<div class="dept-row"><input class="dname" value="'+d.name.replace(/"/g,'&quot;')+'" onchange="setDeptName('+i+',this.value)"><input class="days" type="number" value="'+d.alertDays+'" onchange="setDeptDays('+i+',this.value)"><span class="dunit">dias</span><button class="del" onclick="delDept('+i+')">x</button></div>').join('');renderTeamAreas();renderInvites();renderConta();renderLojaDados();renderMinhasLojas();}
 function fmtCNPJ(d){if(!d)return '';d=(''+d).replace(/\D/g,'').slice(0,14);return d.replace(/^(\d{2})(\d)/,'$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d)/,'.$1/$2').replace(/(\d{4})(\d)/,'$1-$2');}
 function maskCNPJ(el){el.value=fmtCNPJ(el.value);}
 function renderLojaDados(){const n=document.getElementById('lj_name');if(n)n.value=session.store||'';const c=document.getElementById('lj_cnpj');if(c)c.value=fmtCNPJ(session.cnpj);}
