@@ -369,7 +369,7 @@ async function carregarPerfilEIniciar(userId,email){
   // identidade (nome)
   const {data:prof}=await sb.from('profiles').select('name').eq('id',userId).maybeSingle();
   // lojas vinculadas a este usuário (associações)
-  const {data:memsRaw,error:mErr}=await sb.from('store_members').select('store_id, role, stores(name, paid_until, cnpj, archived_at)').eq('user_id',userId);
+  const {data:memsRaw,error:mErr}=await sb.from('store_members').select('store_id, role, stores(name, paid_until, cnpj, archived_at, plan)').eq('user_id',userId);
   const mems=(memsRaw||[]).filter(m=>m.stores&&!m.stores.archived_at);
   if(mErr||!mems.length){toast('Nenhuma loja vinculada a este usuário','err');return;}
   // qual é a loja ativa
@@ -377,7 +377,7 @@ async function carregarPerfilEIniciar(userId,email){
   let active=mems.find(m=>m.store_id===stt?.active_store_id)||mems[0];
   if(!stt||stt.active_store_id!==active.store_id){await sb.rpc('set_active_store',{p_store_id:active.store_id});}
   const role=active.role==='admin'?'dono':'repo';
-  session={email,role,name:prof?.name||'',userId,storeId:active.store_id,store:active.stores?.name||'Minha loja',paidUntil:active.stores?.paid_until||null,cnpj:active.stores?.cnpj||null,
+  session={email,role,name:prof?.name||'',userId,storeId:active.store_id,store:active.stores?.name||'Minha loja',paidUntil:active.stores?.paid_until||null,cnpj:active.stores?.cnpj||null,plan:active.stores?.plan||'pro',
     stores:mems.map(m=>({id:m.store_id,name:m.stores?.name||'Loja',role:m.role,paidUntil:m.stores?.paid_until||null,cnpj:m.stores?.cnpj||null}))};
   startApp();
 }
@@ -851,7 +851,25 @@ function renderConta(){const el=document.getElementById('contaInfo');if(!el)retu
   let ass='';
   if(!session.paidUntil){ass='<div style="font-size:13px;color:var(--muted);margin-bottom:14px">Assinatura: cortesia / teste (sem data definida)</div>';}
   else{const hoje=new Date();hoje.setHours(0,0,0,0);const pu=new Date(session.paidUntil+'T00:00:00');const dias=Math.round((pu-hoje)/86400000);const venc=dias<0;const dt=pu.toLocaleDateString('pt-BR');ass='<div style="background:'+(venc?'var(--red-soft)':'var(--green-soft)')+';border:1px solid '+(venc?'var(--red)':'var(--green)')+';border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px"><b>Assinatura:</b> '+(venc?('vencida em '+dt):('ativa até '+dt+' ('+dias+' dia'+(dias===1?'':'s')+')'))+'</div>';}
-  el.innerHTML=ass;}
+  // plano atual + botoes de assinatura (so dono)
+  let plano='';
+  if(session.role==='dono'){
+    const pl=session.plan==='essencial'?'Essencial':'Pro';
+    plano='<div style="font-size:13px;color:var(--muted);margin-bottom:8px">Plano atual: <b style="color:var(--ink)">'+pl+'</b></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      +'<button class="btn-model" onclick="assinar(\'essencial\',\'mensal\')">Essencial mensal<small style="display:block;color:var(--muted)">R$ 59/mês</small></button>'
+      +'<button class="btn-model" onclick="assinar(\'essencial\',\'anual\')">Essencial anual<small style="display:block;color:var(--muted)">R$ 590/ano</small></button>'
+      +'<button class="btn-go" style="padding:10px" onclick="assinar(\'pro\',\'mensal\')">Pro mensal<small style="display:block;opacity:.8">R$ 109/mês</small></button>'
+      +'<button class="btn-go" style="padding:10px" onclick="assinar(\'pro\',\'anual\')">Pro anual<small style="display:block;opacity:.8">R$ 1.090/ano</small></button>'
+      +'</div><div style="font-size:11px;color:var(--dim);margin-top:6px">Pague no Pix ou cartão. A validade é estendida automaticamente após o pagamento.</div>';
+  }
+  el.innerHTML=ass+plano;}
+async function assinar(plan,cycle){
+  toast('Abrindo pagamento...');
+  const {data,error}=await sb.functions.invoke('mp-checkout',{body:{storeId:session.storeId,plan,cycle,store:session.store}});
+  if(error||!data||!data.init_point){toast((data&&data.error==='no_token')?'Pagamento ainda não configurado':'Erro ao abrir o pagamento','err');return;}
+  window.open(data.init_point,'_blank');
+}
 async function salvarNome(){const nome=document.getElementById('ac_name').value.trim();if(!nome){toast('Informe o nome','err');return;}const {error}=await sb.from('profiles').update({name:nome}).eq('id',session.userId);if(error){toast('Erro ao salvar','err');return;}session.name=nome;document.getElementById('tbRole').textContent=session.name;toast('Nome atualizado');}
 async function salvarSenha(){const p=document.getElementById('ac_pass').value;if(!p||p.length<6){toast('Senha: mínimo 6 caracteres','err');return;}const {error}=await sb.auth.updateUser({password:p});if(error){toast('Erro ao trocar senha','err');return;}document.getElementById('ac_pass').value='';toast('Senha atualizada');}
 async function renderInvites(){
