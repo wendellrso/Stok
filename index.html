@@ -304,7 +304,7 @@
     <div id="prodStats"></div>
     <input id="prodSearch" placeholder="Buscar por nome ou código de barras" oninput="renderProdSearch()" style="width:100%;padding:12px 13px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);outline:none;margin-bottom:12px">
     <div id="prodSearchResults"></div>
-    <div class="cfg-card" style="margin-top:18px">
+    <div class="cfg-card" id="importCard" style="margin-top:18px">
       <div class="cfg-head" onclick="toggleCfg(this)"><div><div class="cfg-t">Importar produtos</div><div class="cfg-d">Por planilha (CSV) ou nota fiscal (XML)</div></div><span class="cfg-chev">▸</span></div>
       <div class="cfg-body">
         <div class="cfg-sub">Planilha (CSV)</div>
@@ -493,8 +493,8 @@ function subStatus(){
   return {state:'ok'};
 }
 function showBlocked(){document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.add('hidden');document.getElementById('blocked').classList.remove('hidden');const isDono=session.role==='dono';document.getElementById('blkTitle').textContent=isDono?'Assinatura vencida':'Acesso indisponível';document.getElementById('blkMsg').innerHTML=isDono?('A loja <b>'+(session.store||'')+'</b> está com a assinatura vencida. Regularize para voltar a usar o Stok.<br><br><b>Seus dados estão guardados</b> — nada foi perdido.'):'O acesso a esta loja está temporariamente indisponível.';document.getElementById('blkSub').textContent=isDono?'Fale com o suporte para regularizar o pagamento.':'Fale com o responsável pela loja.';stopCam();}
-async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(session.role==='dono'&&st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';const canSwitch=session.stores&&session.stores.length>1;document.getElementById('tbStore').innerHTML=session.store+(canSwitch?' <span style="opacity:.7;font-size:11px">▾</span>':'');document.getElementById('tbStoreWrap').style.cursor=canSwitch?'pointer':'default';const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.toggle('hidden',!isDono);document.getElementById('navProducts').classList.toggle('hidden',!isDono);document.getElementById('navSettings').classList.toggle('hidden',!isDono);document.getElementById('appLoading').classList.remove('hidden');await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();document.getElementById('appLoading').classList.add('hidden');updateAlertBadge();syncPush();go('scan');}
-function go(view){['scan','alerts','report','products','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab('painel');if(view==='products')renderProdutos();if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
+async function startApp(){const st=subStatus();if(st.state==='blocked'){showBlocked();return;}document.getElementById('login').classList.add('hidden');document.getElementById('blocked').classList.add('hidden');document.getElementById('app').classList.remove('hidden');const sbn=document.getElementById('subBanner');sbn.innerHTML=(session.role==='dono'&&st.state==='warn')?(st.vencida?'<div class="banner warn"><span>!</span><div>Assinatura <b>vencida</b>. Regularize para não bloquear o acesso (em '+st.restante+' dia(s)).</div></div>':'<div class="banner warn"><span>!</span><div>Sua assinatura vence em <b>'+st.dias+' dia(s)</b>.</div></div>'):'';const canSwitch=session.stores&&session.stores.length>1;document.getElementById('tbStore').innerHTML=session.store+(canSwitch?' <span style="opacity:.7;font-size:11px">▾</span>':'');document.getElementById('tbStoreWrap').style.cursor=canSwitch?'pointer':'default';const isDono=session.role==='dono';document.getElementById('tbRole').textContent=session.name||(isDono?'Acesso total':'Operação');const pill=document.getElementById('tbPill');pill.textContent=isDono?'Admin':'Operador';pill.className='pill '+(isDono?'dono':'repo');document.getElementById('navReport').classList.remove('hidden');document.getElementById('navProducts').classList.remove('hidden');document.getElementById('navSettings').classList.toggle('hidden',!isDono);['painel','loss','mov'].forEach(r=>{const b=document.querySelector('#reportSeg [data-rep="'+r+'"]');if(b)b.classList.toggle('hidden',!isDono);});document.getElementById('appLoading').classList.remove('hidden');await loadDepts();await loadProducts();await loadLots();await loadProfiles();await loadMyAreas();document.getElementById('appLoading').classList.add('hidden');updateAlertBadge();syncPush();go('scan');}
+function go(view){['scan','alerts','report','products','settings'].forEach(v=>document.getElementById('v-'+v).classList.toggle('hidden',v!==view));document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='scan')renderScan();if(view==='alerts')renderAlerts();if(view==='report')repTab(session.role==='dono'?'painel':'risk');if(view==='products')renderProdutos();if(view==='settings')renderSettings();if(view!=='scan')stopCam();}
 async function loadDepts(){
   const {data,error}=await sb.from('departments').select('id, name, alert_days').order('name');
   if(error){toast('Erro ao carregar departamentos','err');return;}
@@ -662,13 +662,15 @@ async function deleteLot(id){const {error}=await sb.from('lots').delete().eq('id
 function fmt(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 let _criticoPDF=null;
 function renderCritico(){
+  const isDono=session.role==='dono';
   const crit=db.lots.map(l=>({...l,days:daysUntil(l.exp),p:db.products[l.code]})).filter(l=>l.p&&l.days>=0&&severity(l.code,l.days)==='crit'&&lotVisivel(l)).sort((a,b)=>a.days-b.days);
   const pend=[...new Set(crit.filter(l=>l.p.cost==null).map(l=>l.code))];
-  const pb=document.getElementById('pendingBanner');pb.innerHTML=pend.length?'<div class="banner warn"><span>!</span><div><b>'+pend.length+' produto(s)</b> sem custo não entram no cálculo. Toque para preencher.</div></div>':'';pb.onclick=pend.length?()=>openCostFix(pend):null;
+  const pb=document.getElementById('pendingBanner');pb.innerHTML=(isDono&&pend.length)?'<div class="banner warn"><span>!</span><div><b>'+pend.length+' produto(s)</b> sem custo não entram no cálculo. Toque para preencher.</div></div>':'';pb.onclick=(isDono&&pend.length)?()=>openCostFix(pend):null;
   let total=0;crit.forEach(l=>{if(l.p.cost!=null)total+=l.p.cost*l.qty;});
-  document.getElementById('riskVal').textContent=fmt(total);
-  document.getElementById('riskSub').textContent=crit.length+' lote(s) crítico(s)';
-  document.getElementById('deptBars').innerHTML=crit.length?crit.map(l=>{const dl=l.days===0?'hoje':l.days+(l.days===1?' dia':' dias');return '<div class="item crit" style="cursor:pointer" onclick="openLotEdit(\''+l.id+'\')"><div class="item-main"><div class="item-name">'+l.p.name+'</div><div class="item-meta"><span class="tag">'+l.p.dept+'</span><span class="tag lote">Lote '+l.lot+'</span><span>Qtd '+l.qty+'</span>'+(l.p.cost!=null?'<span class="tag">'+fmt(l.p.cost*l.qty)+'</span>':'')+'</div></div><div class="item-days"><div class="d">'+l.days+'</div><div class="lbl">'+dl+'</div></div></div>';}).join(''):'<div class="empty">Nenhum produto crítico agora</div>';
+  const rt=document.getElementById('riskVal').parentElement;
+  if(isDono){document.querySelector('#rep-risk .risk-total .lbl').textContent='Em risco — próximos 7 dias';document.getElementById('riskVal').textContent=fmt(total);document.getElementById('riskSub').textContent=crit.length+' lote(s) crítico(s)';}
+  else{document.querySelector('#rep-risk .risk-total .lbl').textContent='Vencendo em 7 dias';document.getElementById('riskVal').textContent=crit.length;document.getElementById('riskSub').textContent='lote(s) para atacar primeiro';}
+  document.getElementById('deptBars').innerHTML=crit.length?crit.map(l=>{const dl=l.days===0?'hoje':l.days+(l.days===1?' dia':' dias');return '<div class="item crit" style="cursor:pointer" onclick="openLotEdit(\''+l.id+'\')"><div class="item-main"><div class="item-name">'+l.p.name+'</div><div class="item-meta"><span class="tag">'+l.p.dept+'</span><span class="tag lote">Lote '+l.lot+'</span><span>Qtd '+l.qty+'</span>'+(isDono&&l.p.cost!=null?'<span class="tag">'+fmt(l.p.cost*l.qty)+'</span>':'')+'</div></div><div class="item-days"><div class="d">'+l.days+'</div><div class="lbl">'+dl+'</div></div></div>';}).join(''):'<div class="empty">Nenhum produto crítico agora</div>';
   _criticoPDF={crit,total};
 }
 async function shareReport(){
@@ -690,15 +692,29 @@ async function renderPainel(){
   const ini=new Date();ini.setDate(1);ini.setHours(0,0,0,0);
   const {data}=await sb.from('baixas').select('qty, reason, product_id').gte('created_at',ini.toISOString());
   const byId={};Object.values(db.products).forEach(p=>byId[p.id]=p);
-  let perdaMes=0,saidasMes=0;
-  (data||[]).forEach(b=>{const p=byId[b.product_id];if(b.reason==='perdido'){if(p&&p.cost!=null)perdaMes+=p.cost*b.qty;}else saidasMes+=b.qty;});
+  let perdaMes=0,saidasMes=0;const lossDept={},lossProd={};
+  (data||[]).forEach(b=>{const p=byId[b.product_id];if(b.reason==='perdido'){const v=(p&&p.cost!=null)?p.cost*b.qty:0;perdaMes+=v;if(p){lossDept[p.dept]=(lossDept[p.dept]||0)+v;(lossProd[p.name]=lossProd[p.name]||{q:0}).q+=b.qty;}}else saidasMes+=b.qty;});
+  // mês anterior (p/ comparativo)
+  const iniPrev=new Date(ini);iniPrev.setMonth(iniPrev.getMonth()-1);
+  const {data:prevData}=await sb.from('baixas').select('qty, reason, product_id').gte('created_at',iniPrev.toISOString()).lt('created_at',ini.toISOString());
+  let perdaPrev=0;(prevData||[]).forEach(b=>{const p=byId[b.product_id];if(b.reason==='perdido'&&p&&p.cost!=null)perdaPrev+=p.cost*b.qty;});
   const card=(val,lab,sub,cor,onclick)=>'<div class="panel-card" onclick="'+onclick+'"><div class="pv" style="color:'+cor+'">'+val+'</div><div class="pl">'+lab+'</div>'+(sub?'<div class="ps">'+sub+'</div>':'')+'</div>';
+  const topDept=Object.entries(lossDept).sort((a,b)=>b[1]-a[1])[0];
+  const topProd=Object.entries(lossProd).sort((a,b)=>b[1].q-a[1].q)[0];
+  let par=[];
+  if(perdaPrev>0){const pct=Math.round((perdaMes-perdaPrev)/perdaPrev*100);if(pct<0)par.push('Sua perda <b>caiu '+Math.abs(pct)+'%</b> vs o mês passado ('+fmt(perdaPrev)+' → '+fmt(perdaMes)+'). O Stok está se pagando.');else if(pct>0)par.push('Sua perda <b>subiu '+pct+'%</b> vs o mês passado ('+fmt(perdaPrev)+' → '+fmt(perdaMes)+'). Vale olhar de perto.');else par.push('Sua perda ficou igual ao mês passado ('+fmt(perdaMes)+').');}
+  else if(perdaMes>0)par.push('Você jogou fora <b>'+fmt(perdaMes)+'</b> este mês. (Ainda sem mês anterior pra comparar.)');
+  if(topDept&&topDept[1]>0)par.push('Setor que mais perde: <b>'+topDept[0]+'</b> ('+fmt(topDept[1])+').');
+  if(topProd&&topProd[1].q>0)par.push('Campeão de perda: <b>'+topProd[0]+'</b> ('+topProd[1].q+' un) — considere comprar menos.');
+  if(critN>0)par.push('Você tem <b>'+critN+' lote(s) crítico(s)</b> — gere ofertas hoje pra não virar perda.');
+  if(vencN>0)par.push('<b>'+vencN+' vencido(s)</b> ainda na loja — recolha da prateleira.');
+  if(!par.length)par.push('Tudo sob controle este mês — sem perdas e sem lotes críticos. Bom trabalho.');
   el.innerHTML='<div class="panel-grid">'+
     card(fmt(critR),'Em risco — 7 dias',critN+' lote(s) crítico(s)','var(--amber)',"repTab('risk')")+
     card(vencN,'Vencidos na loja','para recolher','var(--red)',"goAlertas('expired')")+
     card(fmt(perdaMes),'Perdas no mês','jogado fora','var(--red)',"repTab('loss')")+
     card(saidasMes,'Saídas no mês','vendido + oferta (un)','var(--green)',"repTab('mov')")+
-  '</div>';
+  '</div><div class="sec" style="margin-top:16px"><h4>Parecer do mês</h4><div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.7">'+par.map(p=>'• '+p).join('<br>')+'</div></div>';
 }
 let _perdasPDF=null,_movPDF=null;
 async function renderPerdas(){const el=document.getElementById('lossContent');el.innerHTML='<div class="empty">Carregando...</div>';
@@ -788,6 +804,7 @@ function exportarSaidas(){
 let _prodFilter='all',_prodExpanded=false;
 function renderProdutos(){
   _prodFilter='all';_prodExpanded=false;const s=document.getElementById('prodSearch');if(s)s.value='';
+  const ic=document.getElementById('importCard');if(ic)ic.classList.toggle('hidden',session.role!=='dono');
   const total=Object.keys(db.products).length;
   const semCusto=session.role==='dono'?Object.values(db.products).filter(p=>p.cost==null).length:0;
   const el=document.getElementById('prodStats');if(!el){renderProdSearch();return;}
